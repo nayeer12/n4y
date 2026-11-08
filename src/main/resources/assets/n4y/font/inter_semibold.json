@@ -1,0 +1,15 @@
+{
+	"providers": [
+		{
+			"type": "ttf",
+			"file": "n4y:inter/inter_semibold.ttf",
+			"size": 8.5,
+			"oversample": 4.0,
+			"shift": [0, 0.5]
+		},
+		{
+			"type": "reference",
+			"id": "minecraft:default"
+		}
+	]
+}

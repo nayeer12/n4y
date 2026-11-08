@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "n4y-gametest",
+	"version": "1.0.0",
+	"name": "n4y Client GameTests",
+	"environment": "client",
+	"entrypoints": {
+		"fabric-client-gametest": [
+			"com.n4y.client.test.N4yClientGameTest",
+			"com.n4y.client.test.N4yCombatGameTest"
+		]
+	},
+	"depends": {
+		"n4y": "*"
+	}
+}
