@@ -34,5 +34,12 @@
 	"n4y.theme.purple": "Purple",
 	"n4y.theme.blue": "Blue",
 	"n4y.theme.pink": "Pink",
-	"n4y.theme.green": "Green"
+	"n4y.theme.green": "Green",
+	"n4y.tab.profiles": "Profiles",
+	"n4y.profiles.active": "Active profile",
+	"n4y.profiles.use": "Click to load it",
+	"n4y.profiles.name": "New profile name",
+	"n4y.profiles.create": "Create",
+	"n4y.keybind.press": "Press a key…",
+	"n4y.keybind.hint": "Right click a module to bind a key · Esc clears it"
 }

@@ -1,5 +1,8 @@
 package com.n4y.client.test;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.lwjgl.glfw.GLFW;
@@ -9,10 +12,12 @@ import com.n4y.client.gui.screen.N4yMainScreen;
 import com.n4y.client.gui.theme.Theme;
 import com.n4y.client.gui.theme.Themes;
 import com.n4y.client.gui.widget.N4yWidget;
+import com.n4y.client.gui.widget.ProfileRowWidget;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.gametest.v1.TestInput;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -39,7 +44,10 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 			testCategories(context);
 			testSearch(context);
 			testToggleAndScroll(context);
+			testKeybinding(context);
+			testProfiles(context);
 			testAppearance(context);
+			testStoredOnDisk(context);
 			testOptionsRestored(context);
 
 			context.setScreen(() -> null);
@@ -111,10 +119,130 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("n4y-05-scrolled");
 	}
 
-	private void testAppearance(ClientGameTestContext context) {
+	/** Right click a card, press a key, and the module keeps that shortcut. */
+	private void testKeybinding(ClientGameTestContext context) {
+		Module zoom = context.computeOnClient(mc -> N4yClient.get().modules().byId("zoom").orElseThrow());
+		rightClick(context, context.computeOnClient(mc -> screen(mc).cardOf(zoom).orElseThrow()));
+		context.waitTicks(4);
+		check(context, s -> s.bindingModule().isPresent(), "right clicking a card did not start the key binding");
+		context.takeScreenshot("n4y-06-binding");
+
+		context.getInput().pressKey(GLFW.GLFW_KEY_V);
+		context.waitTicks(6);
+		check(context, s -> s.bindingModule().isEmpty(), "the key binding did not finish");
+		context.runOnClient(mc -> {
+			if (zoom.key() != GLFW.GLFW_KEY_V) {
+				throw new AssertionError("Zoom was not bound to V, got " + zoom.key());
+			}
+		});
+		context.takeScreenshot("n4y-07-key-bound");
+	}
+
+	/** Creating, switching and deleting profiles through the interface. */
+	private void testProfiles(ClientGameTestContext context) {
 		click(context, screen(context).tabButtons().get(1));
 		context.waitTicks(8);
-		check(context, s -> s.tab() == N4yMainScreen.Tab.APPEARANCE, "clicking the second tab did not open Appearance");
+		check(context, s -> s.tab() == N4yMainScreen.Tab.PROFILES, "clicking the second tab did not open Profiles");
+		context.takeScreenshot("n4y-08-profiles");
+
+		click(context, screen(context).profileNameBox());
+		context.getInput().typeChars("Grabación");
+		context.waitTicks(4);
+		click(context, screen(context).createProfileButton());
+		context.waitTicks(8);
+		context.runOnClient(mc -> {
+			String active = N4yClient.get().config().activeProfileName();
+			if (!active.equals("Grabación")) {
+				throw new AssertionError("The new profile was not activated, active is " + active);
+			}
+		});
+		context.takeScreenshot("n4y-09-profile-created");
+
+		// Change something only in the new profile.
+		context.runOnClient(mc -> {
+			N4yClient.get().modules().byId("no_view_bobbing").orElseThrow().setEnabled(true);
+			N4yClient.get().themes().select(Themes.BLUE);
+		});
+		context.waitTicks(6);
+
+		switchToProfile(context, "Default");
+		context.runOnClient(mc -> {
+			if (N4yClient.get().modules().byId("no_view_bobbing").orElseThrow().isEnabled()) {
+				throw new AssertionError("State leaked from the other profile");
+			}
+			if (!N4yClient.get().themes().selected().id().equals("purple")) {
+				throw new AssertionError("The Default profile did not restore its theme");
+			}
+		});
+
+		switchToProfile(context, "Grabación");
+		context.runOnClient(mc -> {
+			if (!N4yClient.get().modules().byId("no_view_bobbing").orElseThrow().isEnabled()) {
+				throw new AssertionError("The saved profile lost its module state");
+			}
+			if (!N4yClient.get().themes().selected().id().equals("blue")) {
+				throw new AssertionError("The saved profile lost its theme");
+			}
+		});
+
+		switchToProfile(context, "Default");
+		deleteProfile(context, "Grabación");
+		context.runOnClient(mc -> {
+			if (N4yClient.get().config().profileNames().contains("Grabación")) {
+				throw new AssertionError("The deleted profile is still listed");
+			}
+		});
+		click(context, screen(context).tabButtons().get(0));
+		context.waitTicks(4);
+	}
+
+	/** The profile on disk really holds what the interface shows. */
+	private void testStoredOnDisk(ClientGameTestContext context) {
+		context.runOnClient(mc -> {
+			N4yClient.get().config().markDirty();
+			N4yClient.get().config().flush();
+			Path file = FabricLoader.getInstance().getConfigDir().resolve("n4y/profiles/default.json");
+			String json;
+			try {
+				json = Files.readString(file);
+			} catch (IOException e) {
+				throw new AssertionError("The profile file was not written to " + file, e);
+			}
+			if (!json.contains("\"key\": " + GLFW.GLFW_KEY_V)) {
+				throw new AssertionError("The key bind was not stored:\n" + json);
+			}
+			if (!json.contains("\"zoom\"")) {
+				throw new AssertionError("The modules were not stored:\n" + json);
+			}
+		});
+	}
+
+	private void switchToProfile(ClientGameTestContext context, String name) {
+		click(context, screen(context).tabButtons().get(1));
+		context.waitTicks(4);
+		ProfileRowWidget row = context.computeOnClient(mc -> screen(mc).profileRowWidgets().stream()
+				.filter(r -> r.profileName().equals(name)).findFirst()
+				.orElseThrow(() -> new AssertionError("Profile not listed: " + name)));
+		click(context, row);
+		context.waitTicks(10);
+	}
+
+	private void deleteProfile(ClientGameTestContext context, String name) {
+		ProfileRowWidget row = context.computeOnClient(mc -> screen(mc).profileRowWidgets().stream()
+				.filter(r -> r.profileName().equals(name)).findFirst()
+				.orElseThrow(() -> new AssertionError("Profile not listed: " + name)));
+		double[] pixels = context.computeOnClient(mc -> screen(mc).toWindowPixels(
+				row.x() + row.width() - 17f, row.y() + row.height() / 2f));
+		context.getInput().setCursorPos(pixels[0], pixels[1]);
+		context.waitTick();
+		context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(6);
+	}
+
+	private void testAppearance(ClientGameTestContext context) {
+		click(context, screen(context).tabButtons().get(2));
+		context.waitTicks(8);
+		check(context, s -> s.tab() == N4yMainScreen.Tab.APPEARANCE, "clicking the third tab did not open Appearance");
 		context.takeScreenshot("n4y-06-appearance");
 
 		List<Theme> themes = Themes.ALL;
@@ -176,11 +304,19 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 
 	/** Moves the real cursor onto {@code widget} and clicks it. */
 	private void click(ClientGameTestContext context, N4yWidget widget) {
+		press(context, widget, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+	}
+
+	private void rightClick(ClientGameTestContext context, N4yWidget widget) {
+		press(context, widget, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+	}
+
+	private void press(ClientGameTestContext context, N4yWidget widget, int button) {
 		double[] pixels = context.computeOnClient(mc -> screen(mc).centreOf(widget));
 		TestInput input = context.getInput();
 		input.setCursorPos(pixels[0], pixels[1]);
 		context.waitTick();
-		input.pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		input.pressMouse(button);
 		context.waitTicks(2);
 	}
 

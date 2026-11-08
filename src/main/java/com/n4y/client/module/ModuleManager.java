@@ -2,10 +2,10 @@ package com.n4y.client.module;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 import com.n4y.client.N4y;
+import com.n4y.client.core.Strings;
 import com.n4y.client.core.event.EventBus;
 import com.n4y.client.core.event.events.ClientShutdownEvent;
 import com.n4y.client.core.event.events.ClientTickEvent;
@@ -22,6 +22,9 @@ import net.minecraft.client.Minecraft;
 /** Registry and driver of every {@link Module}. */
 public final class ModuleManager {
 	private final List<Module> modules = new ArrayList<>();
+	private Runnable changeListener = () -> { };
+	/** Suppresses change notifications while a stored configuration is being applied. */
+	private boolean applying;
 
 	/** Registers the built-in modules. Order here is the order shown in the interface. */
 	public void registerDefaults() {
@@ -38,7 +41,29 @@ public final class ModuleManager {
 		if (byId(module.id()).isPresent()) {
 			throw new IllegalArgumentException("Duplicate module id: " + module.id());
 		}
+		module.setChangeListener(this::onModuleChanged);
 		modules.add(module);
+	}
+
+	/** Called whenever any module is toggled or rebound; the config layer listens here. */
+	public void onChange(Runnable listener) {
+		this.changeListener = listener;
+	}
+
+	private void onModuleChanged() {
+		if (!applying) {
+			changeListener.run();
+		}
+	}
+
+	/** Runs {@code action} without reporting the resulting changes (used while loading). */
+	public void applySilently(Runnable action) {
+		applying = true;
+		try {
+			action.run();
+		} finally {
+			applying = false;
+		}
 	}
 
 	/** Hooks the manager onto the client event bus. */
@@ -62,14 +87,16 @@ public final class ModuleManager {
 
 	/** Turns everything off and writes the restored vanilla options to disk. */
 	public void disableAll(Minecraft mc) {
-		boolean any = false;
-		for (Module module : modules) {
-			if (module.isEnabled()) {
-				module.setEnabled(false);
-				any = true;
+		boolean[] any = {false};
+		applySilently(() -> {
+			for (Module module : modules) {
+				if (module.isEnabled()) {
+					module.setEnabled(false);
+					any[0] = true;
+				}
 			}
-		}
-		if (any && mc.options != null) {
+		});
+		if (any[0] && mc.options != null) {
 			mc.options.save();
 		}
 	}
@@ -110,19 +137,6 @@ public final class ModuleManager {
 
 	/** Lower-cases and strips accents so "zoom" matches "Zoom" and "camara" matches "Cámara". */
 	public static String normalise(String text) {
-		String lower = text.toLowerCase(Locale.ROOT).strip();
-		StringBuilder sb = new StringBuilder(lower.length());
-		for (int i = 0; i < lower.length(); i++) {
-			sb.append(switch (lower.charAt(i)) {
-				case 'á', 'à', 'ä', 'â' -> 'a';
-				case 'é', 'è', 'ë', 'ê' -> 'e';
-				case 'í', 'ì', 'ï', 'î' -> 'i';
-				case 'ó', 'ò', 'ö', 'ô' -> 'o';
-				case 'ú', 'ù', 'ü', 'û' -> 'u';
-				case 'ñ' -> 'n';
-				default -> lower.charAt(i);
-			});
-		}
-		return sb.toString();
+		return Strings.normalise(text);
 	}
 }

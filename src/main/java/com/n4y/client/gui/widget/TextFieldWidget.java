@@ -2,6 +2,7 @@ package com.n4y.client.gui.widget;
 
 import com.n4y.client.gui.anim.Animation;
 import com.n4y.client.gui.anim.Easing;
+import com.n4y.client.gui.icon.Icon;
 import com.n4y.client.gui.icon.IconTextures;
 import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.render.Colors;
@@ -11,17 +12,27 @@ import com.n4y.client.gui.theme.Theme;
 
 import net.minecraft.network.chat.Component;
 
-/** Glass search field with icon, placeholder and a blinking caret while focused. */
-public final class SearchBoxWidget extends N4yWidget {
-	private static final int MAX_LENGTH = 48;
-
+/**
+ * Glass text field with an optional leading icon, a placeholder and a blinking caret while
+ * focused. Used for the module search and for naming a new profile.
+ */
+public final class TextFieldWidget extends N4yWidget {
+	private final Icon icon;
 	private final Component placeholder;
+	private final int maxLength;
 	private final Animation focusAnim = new Animation(0f, 200, Easing.OUT_CUBIC);
 	private final StringBuilder text = new StringBuilder();
 	private boolean focused;
 
-	public SearchBoxWidget(Component placeholder) {
+	public TextFieldWidget(Icon icon, Component placeholder, int maxLength) {
+		this.icon = icon;
 		this.placeholder = placeholder;
+		this.maxLength = maxLength;
+	}
+
+	/** The field used for searching modules. */
+	public static TextFieldWidget search(Component placeholder) {
+		return new TextFieldWidget(Icons.SEARCH, placeholder, 48);
 	}
 
 	public String text() {
@@ -44,9 +55,14 @@ public final class SearchBoxWidget extends N4yWidget {
 		text.setLength(0);
 	}
 
+	public void setText(String value) {
+		text.setLength(0);
+		text.append(value, 0, Math.min(value.length(), maxLength));
+	}
+
 	/** Appends a typed character; returns true when the query changed. */
 	public boolean append(int codepoint) {
-		if (!focused || text.length() >= MAX_LENGTH || Character.isISOControl(codepoint)) {
+		if (!focused || text.length() >= maxLength || Character.isISOControl(codepoint)) {
 			return false;
 		}
 		text.appendCodePoint(codepoint);
@@ -89,12 +105,15 @@ public final class SearchBoxWidget extends N4yWidget {
 		GlassRenderer.border(ctx.g(), x, y, width, height, r, 0.5f,
 				Colors.fade(Colors.lerp(t.borderTop(), t.accent(), f), a), Colors.fade(t.borderBottom(), a));
 
-		IconTextures.draw(ctx.g(), Icons.SEARCH, x + 8, y + (height - 12f) / 2f, 12f,
-				Colors.fade(Colors.lerp(t.textMuted(), t.accent(), f), a));
+		float textX = x + 11;
+		if (icon != null) {
+			IconTextures.draw(ctx.g(), icon, x + 8, y + (height - 12f) / 2f, 12f,
+					Colors.fade(Colors.lerp(t.textMuted(), t.accent(), f), a));
+			textX = x + 24;
+		}
 
-		float textX = x + 24;
 		float textY = y + (height - 7f) / 2f - 0.5f;
-		float maxW = width - 24 - 10;
+		float maxW = width - (textX - x) - 10;
 		if (text.isEmpty()) {
 			N4yText.draw(ctx.g(), placeholder.getString(), textX, textY, 0.9f, Colors.fade(t.textMuted(), a), false);
 		} else {

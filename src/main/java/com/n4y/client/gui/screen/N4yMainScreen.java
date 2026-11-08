@@ -10,6 +10,7 @@ import org.lwjgl.glfw.GLFW;
 
 import com.n4y.client.N4y;
 import com.n4y.client.N4yClient;
+import com.n4y.client.config.ConfigManager;
 import com.n4y.client.gui.anim.Animation;
 import com.n4y.client.gui.anim.Easing;
 import com.n4y.client.gui.icon.IconTextures;
@@ -20,11 +21,13 @@ import com.n4y.client.gui.render.N4yText;
 import com.n4y.client.gui.render.UiScale;
 import com.n4y.client.gui.theme.Theme;
 import com.n4y.client.gui.theme.Themes;
+import com.n4y.client.gui.widget.ButtonWidget;
 import com.n4y.client.gui.widget.ModuleCardWidget;
 import com.n4y.client.gui.widget.N4yWidget;
-import com.n4y.client.gui.widget.SearchBoxWidget;
+import com.n4y.client.gui.widget.ProfileRowWidget;
 import com.n4y.client.gui.widget.SidebarItemWidget;
 import com.n4y.client.gui.widget.TabButtonWidget;
+import com.n4y.client.gui.widget.TextFieldWidget;
 import com.n4y.client.gui.widget.UiContext;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
@@ -38,29 +41,31 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 /**
- * The main n4y interface: header with tabs and search, category sidebar and a scrollable grid
- * of module cards, plus the appearance tab holding the theme picker.
+ * The main n4y interface: a header with tabs and search, the module grid with its category
+ * sidebar, the profile manager and the theme picker.
  *
  * <p>The screen owns layout and input; drawing is delegated to the widgets and the Glass
- * renderer, and every control maps to real state (a module or the theme engine).
+ * renderer, and every control maps to real state (a module, a profile or the theme engine).
  */
 public final class N4yMainScreen extends Screen {
 	/** The sections of the interface, selected by the header tabs. */
 	public enum Tab {
-		MODULES, APPEARANCE
+		MODULES, PROFILES, APPEARANCE
 	}
 
 	private static final float PANEL_W = 480f;
 	private static final float PANEL_H = 268f;
+	private static final float PANEL_R = 16f;
 	/** Margin kept between the panel and the window edge, in GUI units. */
 	private static final float MARGIN = 14f;
-	private static final float PANEL_R = 16f;
 	private static final float HEADER_H = 52f;
 	private static final float PAD = 14f;
 	private static final float SIDEBAR_W = 100f;
 	private static final float CARD_H = 46f;
+	private static final float ROW_H = 34f;
 	private static final float GAP = 8f;
 	private static final float SCROLLBAR_W = 7f;
+	private static final float FIELD_H = 26f;
 
 	/** Kept between openings so the interface comes back where the user left it. */
 	private static Tab lastTab = Tab.MODULES;
@@ -72,10 +77,14 @@ public final class N4yMainScreen extends Screen {
 	private final List<SidebarItemWidget> sidebar = new ArrayList<>();
 	private final List<TabButtonWidget> tabs = new ArrayList<>();
 	private final List<ThemeOption> themeOptions = new ArrayList<>();
-	private SearchBoxWidget search;
+	private final List<ProfileRowWidget> profileRows = new ArrayList<>();
+	private TextFieldWidget search;
+	private TextFieldWidget profileName;
+	private ButtonWidget createProfile;
 
 	private Tab tab = lastTab;
 	private ModuleCategory category = lastCategory;
+	private Module bindingModule;
 	private float scrollTarget;
 	private float maxScroll;
 	private float panelX;
@@ -92,6 +101,10 @@ public final class N4yMainScreen extends Screen {
 		return N4yClient.get().modules();
 	}
 
+	private ConfigManager config() {
+		return N4yClient.get().config();
+	}
+
 	// ------------------------------------------------------------------ setup
 
 	@Override
@@ -103,18 +116,32 @@ public final class N4yMainScreen extends Screen {
 		themeOptions.clear();
 
 		for (Module module : modules().all()) {
-			cards.put(module, new ModuleCardWidget(module));
+			cards.put(module, new ModuleCardWidget(module, () -> bindingModule == module));
 		}
 		for (ModuleCategory c : ModuleCategory.values()) {
 			sidebar.add(new SidebarItemWidget(c, () -> category == c));
 		}
 		tabs.add(new TabButtonWidget(Icons.GRID, Component.translatable("n4y.tab.modules"), () -> tab == Tab.MODULES));
+		tabs.add(new TabButtonWidget(Icons.FOLDER, Component.translatable("n4y.tab.profiles"), () -> tab == Tab.PROFILES));
 		tabs.add(new TabButtonWidget(Icons.PALETTE, Component.translatable("n4y.tab.appearance"), () -> tab == Tab.APPEARANCE));
 		for (Theme t : Themes.ALL) {
 			themeOptions.add(new ThemeOption(t));
 		}
 		if (search == null) {
-			search = new SearchBoxWidget(Component.translatable("n4y.search"));
+			search = TextFieldWidget.search(Component.translatable("n4y.search"));
+		}
+		if (profileName == null) {
+			profileName = new TextFieldWidget(null, Component.translatable("n4y.profiles.name"), 24);
+			createProfile = new ButtonWidget(Component.translatable("n4y.profiles.create"), true,
+					() -> com.n4y.client.config.Profile.isValidName(profileName.text()) && !config().exists(profileName.text()));
+		}
+		refreshProfiles();
+	}
+
+	private void refreshProfiles() {
+		profileRows.clear();
+		for (String name : config().profileNames()) {
+			profileRows.add(new ProfileRowWidget(name, () -> config().activeProfileName().equalsIgnoreCase(name)));
 		}
 	}
 
@@ -150,8 +177,25 @@ public final class N4yMainScreen extends Screen {
 		return List.copyOf(themeOptions);
 	}
 
-	public SearchBoxWidget searchBox() {
+	public List<ProfileRowWidget> profileRowWidgets() {
+		return List.copyOf(profileRows);
+	}
+
+	public TextFieldWidget searchBox() {
 		return search;
+	}
+
+	public TextFieldWidget profileNameBox() {
+		return profileName;
+	}
+
+	public ButtonWidget createProfileButton() {
+		return createProfile;
+	}
+
+	/** The module waiting for a key press, if the user is binding one. */
+	public Optional<Module> bindingModule() {
+		return Optional.ofNullable(bindingModule);
 	}
 
 	public Optional<ModuleCardWidget> cardOf(Module module) {
@@ -179,10 +223,6 @@ public final class N4yMainScreen extends Screen {
 
 	// ------------------------------------------------------------------ layout
 
-	private List<Module> visibleModules() {
-		return modules().filter(category, search == null ? "" : search.text());
-	}
-
 	/** Virtual (zoom-corrected) cursor position used for hit testing. */
 	private float virtualX(double mouseX) {
 		return (float) (mouseX / ui);
@@ -190,6 +230,26 @@ public final class N4yMainScreen extends Screen {
 
 	private float virtualY(double mouseY) {
 		return (float) (mouseY / ui) - lift;
+	}
+
+	private List<Module> visibleModules() {
+		return modules().filter(category, search == null ? "" : search.text());
+	}
+
+	private float bodyY() {
+		return panelY + HEADER_H;
+	}
+
+	private float bodyH() {
+		return PANEL_H - HEADER_H - PAD;
+	}
+
+	private float contentX() {
+		return panelX + PAD + SIDEBAR_W + GAP;
+	}
+
+	private float contentW() {
+		return PANEL_W - (contentX() - panelX) - PAD - SCROLLBAR_W;
 	}
 
 	private void layout() {
@@ -205,41 +265,58 @@ public final class N4yMainScreen extends Screen {
 			t.bounds(tx, panelY + 13f, tabW, tabH);
 			tx += tabW + 5f;
 		}
-		search.bounds(panelX + PANEL_W - PAD - 118f, panelY + 13f, 118f, 26f);
+		search.bounds(panelX + PANEL_W - PAD - 118f, panelY + 13f, 118f, FIELD_H);
 
-		float bodyY = panelY + HEADER_H;
-		float bodyH = PANEL_H - HEADER_H - PAD;
 		float itemH = 23f;
 		float itemGap = 2.5f;
-		float iy = bodyY + 8f;
+		float iy = bodyY() + 8f;
 		for (SidebarItemWidget item : sidebar) {
 			item.bounds(panelX + PAD + 6f, iy, SIDEBAR_W - 12f, itemH);
 			iy += itemH + itemGap;
 		}
 
-		float cx = panelX + PAD + SIDEBAR_W + GAP;
-		float cw = PANEL_W - (cx - panelX) - PAD - SCROLLBAR_W;
-		if (tab == Tab.MODULES) {
-			List<Module> visible = visibleModules();
-			float cardW = (cw - GAP) / 2f;
-			int rows = (visible.size() + 1) / 2;
-			maxScroll = Math.max(0f, rows * CARD_H + Math.max(0, rows - 1) * GAP - bodyH);
-			scrollTarget = Math.max(0f, Math.min(scrollTarget, maxScroll));
-			float offset = scroll.value(System.nanoTime());
-			for (int i = 0; i < visible.size(); i++) {
-				ModuleCardWidget card = cards.get(visible.get(i));
-				float col = i % 2;
-				float row = i / 2;
-				card.bounds(cx + col * (cardW + GAP), bodyY + row * (CARD_H + GAP) - offset, cardW, CARD_H);
+		float offset = scroll.value(System.nanoTime());
+		switch (tab) {
+			case MODULES -> {
+				List<Module> visible = visibleModules();
+				float cardW = (contentW() - GAP) / 2f;
+				int rows = (visible.size() + 1) / 2;
+				maxScroll = Math.max(0f, rows * CARD_H + Math.max(0, rows - 1) * GAP - bodyH());
+				scrollTarget = Math.max(0f, Math.min(scrollTarget, maxScroll));
+				for (int i = 0; i < visible.size(); i++) {
+					ModuleCardWidget card = cards.get(visible.get(i));
+					card.bounds(contentX() + (i % 2) * (cardW + GAP), bodyY() + (i / 2) * (CARD_H + GAP) - offset, cardW, CARD_H);
+				}
 			}
-		} else {
-			maxScroll = 0f;
-			float ow = (PANEL_W - PAD * 2 - GAP) / 2f;
-			float oh = 56f;
-			for (int i = 0; i < themeOptions.size(); i++) {
-				themeOptions.get(i).bounds(panelX + PAD + (i % 2) * (ow + GAP), bodyY + 6f + (i / 2) * (oh + GAP), ow, oh);
+			case PROFILES -> {
+				float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
+				float listH = profileListHeight();
+				maxScroll = Math.max(0f, profileRows.size() * ROW_H + Math.max(0, profileRows.size() - 1) * 6f - listH);
+				scrollTarget = Math.max(0f, Math.min(scrollTarget, maxScroll));
+				for (int i = 0; i < profileRows.size(); i++) {
+					profileRows.get(i).bounds(panelX + PAD, bodyY() + i * (ROW_H + 6f) - offset, listW, ROW_H);
+				}
+				float barY = bodyY() + bodyH() - FIELD_H;
+				float buttonW = 78f;
+				profileName.bounds(panelX + PAD, barY, PANEL_W - PAD * 2 - buttonW - GAP, FIELD_H);
+				createProfile.bounds(panelX + PANEL_W - PAD - buttonW, barY, buttonW, FIELD_H);
+			}
+			case APPEARANCE -> {
+				maxScroll = 0f;
+				float ow = (PANEL_W - PAD * 2 - GAP) / 2f;
+				float oh = 56f;
+				for (int i = 0; i < themeOptions.size(); i++) {
+					themeOptions.get(i).bounds(panelX + PAD + (i % 2) * (ow + GAP), bodyY() + 6f + (i / 2) * (oh + GAP), ow, oh);
+				}
+			}
+			default -> {
 			}
 		}
+	}
+
+	/** Height of the scrollable profile list, leaving room for the creation bar below it. */
+	private float profileListHeight() {
+		return bodyH() - FIELD_H - 22f;
 	}
 
 	// ------------------------------------------------------------------ render
@@ -273,11 +350,15 @@ public final class N4yMainScreen extends Screen {
 		GlassRenderer.glassPanel(g, panelX, panelY, PANEL_W, PANEL_H, PANEL_R, t, a);
 		renderHeader(ctx);
 
-		if (tab == Tab.MODULES) {
-			renderSidebar(ctx);
-			renderModules(ctx, virtualY(mouseY));
-		} else {
-			renderAppearance(ctx);
+		switch (tab) {
+			case MODULES -> {
+				renderSidebar(ctx);
+				renderModules(ctx, virtualY(mouseY));
+			}
+			case PROFILES -> renderProfiles(ctx, virtualY(mouseY));
+			case APPEARANCE -> renderAppearance(ctx);
+			default -> {
+			}
 		}
 
 		for (TabButtonWidget button : tabs) {
@@ -317,9 +398,9 @@ public final class N4yMainScreen extends Screen {
 		IconTextures.draw(g, Icons.CUBE, panelX + PAD + 5f, panelY + 18f, 14f, Colors.fade(0xFFFFFFFF, a));
 
 		N4yText.draw(g, N4y.NAME, panelX + PAD + 32f, panelY + 14f, 1.15f, Colors.fade(t.textPrimary(), a), true);
-		int active = modules().enabled().size();
-		String sub = "v" + N4y.version() + " · " + Component.translatable("n4y.header.active", active).getString();
-		N4yText.draw(g, sub, panelX + PAD + 32f, panelY + 27.5f, 0.78f, Colors.fade(t.textMuted(), a), false);
+		String sub = "v" + N4y.version() + " · " + config().activeProfileName() + " · "
+				+ Component.translatable("n4y.header.active", modules().enabled().size()).getString();
+		N4yText.draw(g, N4yText.ellipsize(sub, false, 0.78f, 150f), panelX + PAD + 32f, panelY + 27.5f, 0.78f, Colors.fade(t.textMuted(), a), false);
 
 		if (tab == Tab.MODULES) {
 			search.render(ctx);
@@ -327,12 +408,10 @@ public final class N4yMainScreen extends Screen {
 	}
 
 	private void renderSidebar(UiContext ctx) {
-		float bodyY = panelY + HEADER_H;
-		float bodyH = PANEL_H - HEADER_H - PAD;
-		GlassRenderer.roundedRect(ctx.g(), panelX + PAD, bodyY, SIDEBAR_W, bodyH, 11f,
+		GlassRenderer.roundedRect(ctx.g(), panelX + PAD, bodyY(), SIDEBAR_W, bodyH(), 11f,
 				Colors.fade(Colors.shade(ctx.theme().surface(), 0.03f), ctx.alpha() * 0.75f),
 				Colors.fade(ctx.theme().surface(), ctx.alpha() * 0.55f), GlassRenderer.CORNERS_ALL);
-		GlassRenderer.border(ctx.g(), panelX + PAD, bodyY, SIDEBAR_W, bodyH, 11f, 0.5f,
+		GlassRenderer.border(ctx.g(), panelX + PAD, bodyY(), SIDEBAR_W, bodyH(), 11f, 0.5f,
 				Colors.fade(ctx.theme().borderTop(), ctx.alpha() * 0.5f), Colors.fade(ctx.theme().borderBottom(), ctx.alpha()));
 		for (SidebarItemWidget item : sidebar) {
 			item.render(ctx);
@@ -341,47 +420,49 @@ public final class N4yMainScreen extends Screen {
 
 	private void renderModules(UiContext ctx, float mouseY) {
 		List<Module> visible = visibleModules();
-		float bodyY = panelY + HEADER_H;
-		float bodyH = PANEL_H - HEADER_H - PAD;
-		float cx = panelX + PAD + SIDEBAR_W + GAP;
-		float cw = PANEL_W - (cx - panelX) - PAD - SCROLLBAR_W;
+		float cx = contentX();
+		float cw = contentW();
 
 		if (visible.isEmpty()) {
 			Component message = search.isEmpty()
 					? Component.translatable("n4y.empty.category")
 					: Component.translatable("n4y.empty.search", search.text());
-			N4yText.drawCentered(ctx.g(), message.getString(), cx + cw / 2f, bodyY + bodyH / 2f, 0.85f,
+			N4yText.drawCentered(ctx.g(), message.getString(), cx + cw / 2f, bodyY() + bodyH() / 2f, 0.85f,
 					Colors.fade(ctx.theme().textMuted(), ctx.alpha()), false);
 			return;
 		}
 
-		ctx.g().enableScissor(Math.round(cx), Math.round(bodyY), Math.round(cx + cw), Math.round(bodyY + bodyH));
 		UiContext inner = new UiContext(ctx.g(), ctx.theme(), ctx.now(), ctx.alpha(), ctx.mouseX(), mouseY);
+		ctx.g().enableScissor(Math.round(cx), Math.round(bodyY()), Math.round(cx + cw), Math.round(bodyY() + bodyH()));
 		for (Module module : visible) {
 			ModuleCardWidget card = cards.get(module);
-			if (card.y() + card.height() >= bodyY - 2 && card.y() <= bodyY + bodyH + 2) {
+			if (card.y() + card.height() >= bodyY() - 2 && card.y() <= bodyY() + bodyH() + 2) {
 				card.render(inner);
 			}
 		}
 		ctx.g().disableScissor();
+		renderScrollHints(ctx, cx, bodyY(), cw, bodyH());
+	}
 
-		if (maxScroll > 0.5f) {
-			// Fade the clipped rows into the glass instead of cutting them off sharply.
-			int fadeTop = Colors.fade(ctx.theme().panelBottom(), ctx.alpha() * 0.9f);
-			if (scroll.value(ctx.now()) > 1f) {
-				ctx.g().fillGradient(Math.round(cx), Math.round(bodyY), Math.round(cx + cw), Math.round(bodyY + 10), fadeTop, Colors.fade(fadeTop, 0f));
-			}
-			if (scroll.value(ctx.now()) < maxScroll - 1f) {
-				ctx.g().fillGradient(Math.round(cx), Math.round(bodyY + bodyH - 12), Math.round(cx + cw), Math.round(bodyY + bodyH), Colors.fade(fadeTop, 0f), fadeTop);
-			}
+	private void renderProfiles(UiContext ctx, float mouseY) {
+		float listX = panelX + PAD;
+		float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
+		float listH = profileListHeight();
 
-			float trackX = cx + cw + 3f;
-			float ratio = bodyH / (bodyH + maxScroll);
-			float barH = Math.max(18f, bodyH * ratio);
-			float barY = bodyY + (bodyH - barH) * (scroll.value(ctx.now()) / maxScroll);
-			GlassRenderer.roundedRect(ctx.g(), trackX, bodyY, 2.5f, bodyH, 1.25f, Colors.fade(0x18FFFFFF, ctx.alpha()));
-			GlassRenderer.roundedRect(ctx.g(), trackX, barY, 2.5f, barH, 1.25f, Colors.fade(ctx.theme().accent(), ctx.alpha() * 0.8f));
+		UiContext inner = new UiContext(ctx.g(), ctx.theme(), ctx.now(), ctx.alpha(), ctx.mouseX(), mouseY);
+		ctx.g().enableScissor(Math.round(listX), Math.round(bodyY()), Math.round(listX + listW), Math.round(bodyY() + listH));
+		for (ProfileRowWidget row : profileRows) {
+			if (row.y() + row.height() >= bodyY() - 2 && row.y() <= bodyY() + listH + 2) {
+				row.render(inner);
+			}
 		}
+		ctx.g().disableScissor();
+		renderScrollHints(ctx, listX, bodyY(), listW, listH);
+
+		N4yText.draw(ctx.g(), Component.translatable("n4y.keybind.hint").getString(),
+				listX, bodyY() + listH + 6f, 0.76f, Colors.fade(ctx.theme().textMuted(), ctx.alpha()), false);
+		profileName.render(ctx);
+		createProfile.render(ctx);
 	}
 
 	private void renderAppearance(UiContext ctx) {
@@ -392,58 +473,140 @@ public final class N4yMainScreen extends Screen {
 		}
 	}
 
+	/** Fades the clipped rows into the glass and draws the scrollbar. */
+	private void renderScrollHints(UiContext ctx, float cx, float cy, float cw, float ch) {
+		if (maxScroll <= 0.5f) {
+			return;
+		}
+		float offset = scroll.value(ctx.now());
+		int edge = Colors.fade(ctx.theme().panelBottom(), ctx.alpha() * 0.9f);
+		if (offset > 1f) {
+			ctx.g().fillGradient(Math.round(cx), Math.round(cy), Math.round(cx + cw), Math.round(cy + 10), edge, Colors.fade(edge, 0f));
+		}
+		if (offset < maxScroll - 1f) {
+			ctx.g().fillGradient(Math.round(cx), Math.round(cy + ch - 12), Math.round(cx + cw), Math.round(cy + ch), Colors.fade(edge, 0f), edge);
+		}
+		float trackX = cx + cw + 3f;
+		float barH = Math.max(18f, ch * (ch / (ch + maxScroll)));
+		float barY = cy + (ch - barH) * (offset / maxScroll);
+		GlassRenderer.roundedRect(ctx.g(), trackX, cy, 2.5f, ch, 1.25f, Colors.fade(0x18FFFFFF, ctx.alpha()));
+		GlassRenderer.roundedRect(ctx.g(), trackX, barY, 2.5f, barH, 1.25f, Colors.fade(ctx.theme().accent(), ctx.alpha() * 0.8f));
+	}
+
 	// ------------------------------------------------------------------ input
 
 	@Override
 	public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
 		float mx = virtualX(event.x());
 		float my = virtualY(event.y());
-		if (event.button() != 0) {
+		boolean right = event.button() == 1;
+		if (event.button() != 0 && !right) {
 			return super.mouseClicked(event, doubleClick);
+		}
+
+		if (bindingModule != null) {
+			bindingModule = null;
+			if (!right) {
+				return true;
+			}
 		}
 
 		for (int i = 0; i < tabs.size(); i++) {
 			if (tabs.get(i).contains(mx, my)) {
-				setTab(i == 0 ? Tab.MODULES : Tab.APPEARANCE);
+				setTab(Tab.values()[i]);
 				return true;
 			}
 		}
-		if (tab == Tab.MODULES) {
-			if (search.contains(mx, my)) {
-				search.setFocused(true);
+
+		return switch (tab) {
+			case MODULES -> clickModules(mx, my, right);
+			case PROFILES -> clickProfiles(mx, my);
+			case APPEARANCE -> clickAppearance(mx, my);
+		};
+	}
+
+	private boolean clickModules(float mx, float my, boolean right) {
+		if (search.contains(mx, my)) {
+			search.setFocused(!right);
+			return true;
+		}
+		search.setFocused(false);
+		for (SidebarItemWidget item : sidebar) {
+			if (item.contains(mx, my)) {
+				if (category != item.category()) {
+					category = item.category();
+					resetScroll();
+				}
 				return true;
 			}
-			search.setFocused(false);
-			for (SidebarItemWidget item : sidebar) {
-				if (item.contains(mx, my)) {
-					if (category != item.category()) {
-						category = item.category();
-						scrollTarget = 0f;
-						scroll.set(0f);
-					}
-					return true;
+		}
+		if (my >= bodyY() && my <= bodyY() + bodyH()) {
+			for (Module module : visibleModules()) {
+				ModuleCardWidget card = cards.get(module);
+				if (!card.contains(mx, my)) {
+					continue;
 				}
-			}
-			float bodyY = panelY + HEADER_H;
-			float bodyH = PANEL_H - HEADER_H - PAD;
-			if (my >= bodyY && my <= bodyY + bodyH) {
-				for (Module module : visibleModules()) {
-					ModuleCardWidget card = cards.get(module);
-					if (card.contains(mx, my)) {
-						card.toggle(System.nanoTime());
-						return true;
-					}
+				if (right || card.chipContains(mx, my)) {
+					bindingModule = module;
+				} else {
+					card.toggle(System.nanoTime());
 				}
-			}
-		} else {
-			for (ThemeOption option : themeOptions) {
-				if (option.contains(mx, my)) {
-					N4yClient.get().themes().select(option.theme());
-					return true;
-				}
+				return true;
 			}
 		}
-		return super.mouseClicked(event, doubleClick);
+		return false;
+	}
+
+	private boolean clickProfiles(float mx, float my) {
+		if (profileName.contains(mx, my)) {
+			profileName.setFocused(true);
+			return true;
+		}
+		profileName.setFocused(false);
+		if (createProfile.contains(mx, my)) {
+			if (createProfile.isUsable() && config().createProfile(profileName.text())) {
+				profileName.clear();
+				refreshProfiles();
+				resetScroll();
+			}
+			return true;
+		}
+		float listBottom = bodyY() + profileListHeight();
+		if (my >= bodyY() && my <= listBottom) {
+			for (ProfileRowWidget row : profileRows) {
+				if (!row.contains(mx, my)) {
+					continue;
+				}
+				if (row.deleteContains(mx, my)) {
+					if (config().deleteProfile(row.profileName())) {
+						refreshProfiles();
+					}
+				} else if (!row.isActive() && config().switchProfile(row.profileName())) {
+					refreshProfiles();
+					syncCards();
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean clickAppearance(float mx, float my) {
+		for (ThemeOption option : themeOptions) {
+			if (option.contains(mx, my)) {
+				N4yClient.get().themes().select(option.theme());
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Brings every switch in line with the module states after a profile is loaded. */
+	private void syncCards() {
+		long now = System.nanoTime();
+		for (ModuleCardWidget card : cards.values()) {
+			card.syncTo(now);
+		}
 	}
 
 	private void setTab(Tab next) {
@@ -451,14 +614,23 @@ public final class N4yMainScreen extends Screen {
 			return;
 		}
 		tab = next;
+		bindingModule = null;
 		search.setFocused(false);
+		profileName.setFocused(false);
+		if (next == Tab.PROFILES) {
+			refreshProfiles();
+		}
+		resetScroll();
+	}
+
+	private void resetScroll() {
 		scrollTarget = 0f;
 		scroll.set(0f);
 	}
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-		if (tab == Tab.MODULES && maxScroll > 0f) {
+		if (maxScroll > 0f) {
 			scrollTarget = Math.max(0f, Math.min(maxScroll, scrollTarget - (float) scrollY * 28f));
 			return true;
 		}
@@ -467,9 +639,11 @@ public final class N4yMainScreen extends Screen {
 
 	@Override
 	public boolean charTyped(CharacterEvent event) {
-		if (tab == Tab.MODULES && search.append(event.codepoint())) {
-			scrollTarget = 0f;
-			scroll.set(0f);
+		TextFieldWidget field = focusedField();
+		if (field != null && field.append(event.codepoint())) {
+			if (field == search) {
+				resetScroll();
+			}
 			return true;
 		}
 		return super.charTyped(event);
@@ -477,25 +651,33 @@ public final class N4yMainScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
-		if (tab == Tab.MODULES && search.isFocused()) {
+		if (bindingModule != null) {
+			bindKey(event.key());
+			return true;
+		}
+		TextFieldWidget field = focusedField();
+		if (field != null) {
 			switch (event.key()) {
 				case GLFW.GLFW_KEY_BACKSPACE -> {
-					if (search.backspace((event.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0)) {
-						scrollTarget = 0f;
-						scroll.set(0f);
+					if (field.backspace((event.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0) && field == search) {
+						resetScroll();
 					}
 					return true;
 				}
 				case GLFW.GLFW_KEY_ESCAPE -> {
-					if (!search.isEmpty()) {
-						search.clear();
+					if (!field.isEmpty()) {
+						field.clear();
 					} else {
-						search.setFocused(false);
+						field.setFocused(false);
 					}
 					return true;
 				}
 				case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
-					search.setFocused(false);
+					if (field == profileName && createProfile.isUsable() && config().createProfile(profileName.text())) {
+						profileName.clear();
+						refreshProfiles();
+					}
+					field.setFocused(false);
 					return true;
 				}
 				default -> {
@@ -504,6 +686,26 @@ public final class N4yMainScreen extends Screen {
 			}
 		}
 		return super.keyPressed(event);
+	}
+
+	/** Escape clears the bind, any other key becomes the module's shortcut. */
+	private void bindKey(int key) {
+		Module module = bindingModule;
+		bindingModule = null;
+		if (module == null) {
+			return;
+		}
+		module.setKey(key == GLFW.GLFW_KEY_ESCAPE ? Module.UNBOUND : key);
+	}
+
+	private TextFieldWidget focusedField() {
+		if (tab == Tab.MODULES && search.isFocused()) {
+			return search;
+		}
+		if (tab == Tab.PROFILES && profileName.isFocused()) {
+			return profileName;
+		}
+		return null;
 	}
 
 	@Override

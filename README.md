@@ -22,8 +22,8 @@ Instalar: copia `build/libs/n4y-client-1.0.0.jar` y Fabric API `0.141.6+1.21.11`
 | 1 | Fundación Fabric: entrypoint, EventBus, keybinds, rutas de config | ✅ |
 | 2 | Motor gráfico Glass: formas redondeadas AA, sombras, brillos, 4 temas, animaciones, Inter | ✅ |
 | 3 | Interfaz principal: cabecera, pestañas, buscador, categorías, cuadrícula con scroll | ✅ |
-| 4 | Sistema de módulos: base (`Module`, `ModuleManager`) ✅ · keybinds por módulo ⏳ |
-| 5 | Configuraciones y perfiles | — |
+| 4 | Sistema de módulos: `Module`, `ModuleManager`, keybinds por módulo | ✅ |
+| 5 | Configuración y perfiles: guardado en disco, perfiles, Keybind Manager | ✅ |
 | 6 | Módulos individuales | — |
 | 7 | Herramientas premium | — |
 | 8 | Creator Edition | — |
@@ -47,6 +47,8 @@ gui/
 ├── theme/                Theme, Themes (Púrpura/Azul/Rosa/Verde), ThemeEngine (transición animada)
 └── screen/               N4yMainScreen (interfaz principal)
 module/                   Module, ModuleCategory, ModuleManager + módulos en impl/
+config/                   ConfigManager, Profile, ClientPrefs, ModuleState
+core/keybind/             KeybindManager (teclas propias, sin mixins)
 src/gametest/             pruebas dentro del juego (Fabric Client GameTest)
 ```
 
@@ -66,6 +68,27 @@ Crea un mundo Singleplayer, abre la interfaz y guarda capturas en `build/run/cli
 ![Motor Glass en los 4 temas](docs/screenshots/fase2-motor-glass.png)
 
 </details>
+
+## Configuración y perfiles
+
+Todo se guarda solo en `.minecraft/config/n4y/`:
+
+```
+config/n4y/
+├── client.json              qué perfil se carga al arrancar
+└── profiles/
+    ├── default.json         tema + módulos activos + teclas
+    └── grabacion.json
+```
+
+Un perfil guarda el tema y el estado de cada módulo con su tecla, así que cambiar de perfil
+cambia el cliente entero de golpe. Se escribe como mucho una vez por segundo y en un hilo
+aparte, así que activar un módulo nunca frena el juego.
+
+Teclas: clic derecho en un módulo, pulsa la tecla que quieras, y Esc la quita. Las teclas viven
+en el perfil, no en las opciones de Minecraft, así que viajan contigo al cambiar de perfil.
+
+![Perfiles y teclas](docs/screenshots/fase5-perfiles-keybinds.png)
 
 ## Módulos incluidos
 

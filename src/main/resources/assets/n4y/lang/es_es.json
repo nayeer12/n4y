@@ -34,5 +34,12 @@
 	"n4y.theme.purple": "Púrpura",
 	"n4y.theme.blue": "Azul",
 	"n4y.theme.pink": "Rosa",
-	"n4y.theme.green": "Verde"
+	"n4y.theme.green": "Verde",
+	"n4y.tab.profiles": "Perfiles",
+	"n4y.profiles.active": "Perfil activo",
+	"n4y.profiles.use": "Pulsa para cargarlo",
+	"n4y.profiles.name": "Nombre del perfil nuevo",
+	"n4y.profiles.create": "Crear",
+	"n4y.keybind.press": "Pulsa una tecla…",
+	"n4y.keybind.hint": "Clic derecho en un módulo para asignarle una tecla · Esc la quita"
 }

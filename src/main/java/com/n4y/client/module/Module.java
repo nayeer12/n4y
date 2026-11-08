@@ -14,10 +14,15 @@ import net.minecraft.network.chat.Component;
  * manager disables everything on shutdown so the user's settings survive.
  */
 public abstract class Module {
+	/** Key code meaning "no key bound". */
+	public static final int UNBOUND = -1;
+
 	private final String id;
 	private final ModuleCategory category;
 	private final Icon icon;
 	private boolean enabled;
+	private int key = UNBOUND;
+	private Runnable changeListener = () -> { };
 
 	protected Module(String id, ModuleCategory category, Icon icon) {
 		this.id = id;
@@ -49,6 +54,28 @@ public abstract class Module {
 		return enabled;
 	}
 
+	/** GLFW key code that toggles this module, or {@link #UNBOUND}. */
+	public final int key() {
+		return key;
+	}
+
+	public final void setKey(int value) {
+		if (key == value) {
+			return;
+		}
+		key = value;
+		changeListener.run();
+	}
+
+	public final boolean hasKey() {
+		return key != UNBOUND;
+	}
+
+	/** Set by the {@link ModuleManager} so changes can be persisted. */
+	public final void setChangeListener(Runnable listener) {
+		this.changeListener = listener;
+	}
+
 	public final void toggle() {
 		setEnabled(!enabled);
 	}
@@ -69,6 +96,7 @@ public abstract class Module {
 		} catch (Throwable t) {
 			N4y.LOGGER.error("Module '{}' failed to {}", id, value ? "enable" : "disable", t);
 		}
+		changeListener.run();
 	}
 
 	protected void onEnable(Minecraft mc) {

@@ -89,6 +89,21 @@ public final class Icons {
 			.line(3, 15.5f, 6, 10.5f, 9, 15.5f, 12, 10.5f, 15, 15.5f, 18, 10.5f, 21, 15.5f)
 			.build();
 
+	public static final Icon FOLDER = Icon.of("folder")
+			.line(3, 18.5f, 3, 6, 9.5f, 6, 11.5f, 8.8f, 21, 8.8f, 21, 18.5f, 3, 18.5f)
+			.build();
+
+	public static final Icon CLOSE = Icon.of("close")
+			.line(7, 7, 17, 17)
+			.line(17, 7, 7, 17)
+			.build();
+
+	public static final Icon KEY = Icon.of("key")
+			.ring(8, 12, 4.2f)
+			.line(12, 12, 20.5f, 12)
+			.line(17.5f, 12, 17.5f, 15.5f)
+			.build();
+
 	private Icons() {
 	}
 }
