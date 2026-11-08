@@ -1,7 +1,14 @@
 package com.n4y.client.module;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+
 import com.n4y.client.N4y;
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.gui.icon.Icon;
+import com.n4y.client.module.setting.Setting;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -14,14 +21,12 @@ import net.minecraft.network.chat.Component;
  * manager disables everything on shutdown so the user's settings survive.
  */
 public abstract class Module {
-	/** Key code meaning "no key bound". */
-	public static final int UNBOUND = -1;
-
 	private final String id;
 	private final ModuleCategory category;
 	private final Icon icon;
+	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean enabled;
-	private int key = UNBOUND;
+	private InputBinding key = InputBinding.UNBOUND;
 	private Runnable changeListener = () -> { };
 	private java.util.function.Consumer<Module> stateListener = module -> { };
 
@@ -55,21 +60,50 @@ public abstract class Module {
 		return enabled;
 	}
 
-	/** GLFW key code that toggles this module, or {@link #UNBOUND}. */
-	public final int key() {
+	/** Key or mouse button that switches this module on and off. */
+	public final InputBinding key() {
 		return key;
 	}
 
-	public final void setKey(int value) {
-		if (key == value) {
+	public final void setKey(InputBinding value) {
+		InputBinding safe = value == null ? InputBinding.UNBOUND : value;
+		if (key.equals(safe)) {
 			return;
 		}
-		key = value;
+		key = safe;
 		changeListener.run();
 	}
 
 	public final boolean hasKey() {
-		return key != UNBOUND;
+		return key.isBound();
+	}
+
+	/**
+	 * Registers this module's settings, in the order the interface shows them. Call it from
+	 * the constructor; every setting reports its changes so the profile is saved.
+	 */
+	protected final void addSettings(Setting<?>... values) {
+		for (Setting<?> setting : values) {
+			setting.onChange(() -> changeListener.run());
+			settings.add(setting);
+		}
+	}
+
+	public final List<Setting<?>> settings() {
+		return Collections.unmodifiableList(settings);
+	}
+
+	public final boolean hasSettings() {
+		return !settings.isEmpty();
+	}
+
+	public final Optional<Setting<?>> setting(String settingId) {
+		return settings.stream().filter(setting -> setting.id().equals(settingId)).findFirst();
+	}
+
+	/** Puts every setting back to the value it ships with. */
+	public final void resetSettings() {
+		settings.forEach(Setting::reset);
 	}
 
 	/** Set by the {@link ModuleManager} so changes can be persisted. */

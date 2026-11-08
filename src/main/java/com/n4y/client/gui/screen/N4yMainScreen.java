@@ -11,6 +11,7 @@ import org.lwjgl.glfw.GLFW;
 import com.n4y.client.N4y;
 import com.n4y.client.N4yClient;
 import com.n4y.client.config.ConfigManager;
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.gui.anim.Animation;
 import com.n4y.client.gui.anim.Easing;
 import com.n4y.client.gui.hud.HudModule;
@@ -26,13 +27,17 @@ import com.n4y.client.gui.widget.ButtonWidget;
 import com.n4y.client.gui.widget.ModuleCardWidget;
 import com.n4y.client.gui.widget.N4yWidget;
 import com.n4y.client.gui.widget.ProfileRowWidget;
+import com.n4y.client.gui.widget.SettingRowWidget;
 import com.n4y.client.gui.widget.SidebarItemWidget;
+import com.n4y.client.gui.widget.ToggleSwitch;
 import com.n4y.client.gui.widget.TabButtonWidget;
 import com.n4y.client.gui.widget.TextFieldWidget;
 import com.n4y.client.gui.widget.UiContext;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
 import com.n4y.client.module.ModuleManager;
+import com.n4y.client.module.setting.KeySetting;
+import com.n4y.client.module.setting.Setting;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -67,6 +72,7 @@ public final class N4yMainScreen extends Screen {
 	private static final float GAP = 8f;
 	private static final float SCROLLBAR_W = 7f;
 	private static final float FIELD_H = 26f;
+	private static final float DETAIL_HEADER_H = 40f;
 
 	/** Kept between openings so the interface comes back where the user left it. */
 	private static Tab lastTab = Tab.MODULES;
@@ -87,6 +93,23 @@ public final class N4yMainScreen extends Screen {
 	private Tab tab = lastTab;
 	private ModuleCategory category = lastCategory;
 	private Module bindingModule;
+	private KeySetting bindingSetting;
+	private Module detailModule;
+	private final List<SettingRowWidget> settingRows = new ArrayList<>();
+	private SettingRowWidget draggingRow;
+	private ButtonWidget resetSettings;
+	private final N4yWidget backButton = new N4yWidget() {
+		@Override
+		protected void draw(UiContext ctx, float hovered) {
+			int color = Colors.fade(Colors.lerp(ctx.theme().textSecondary(), ctx.theme().textPrimary(), hovered), ctx.alpha());
+			if (hovered > 0.02f) {
+				GlassRenderer.roundedRect(ctx.g(), x(), y(), width(), height(), 7f,
+						Colors.fade(ctx.theme().surface(), ctx.alpha() * hovered * 0.8f));
+			}
+			IconTextures.draw(ctx.g(), Icons.ARROW_LEFT, x() + (width() - 13f) / 2f, y() + (height() - 13f) / 2f, 13f, color);
+		}
+	};
+	private final ToggleSwitch detailToggle = new ToggleSwitch();
 	private float scrollTarget;
 	private float maxScroll;
 	private float panelX;
@@ -94,6 +117,8 @@ public final class N4yMainScreen extends Screen {
 	/** Uniform zoom that keeps the whole panel on screen, and the open-animation lift. */
 	private float ui = 1f;
 	private float lift;
+	private float moduleKeyChipX;
+	private float moduleKeyChipW;
 	private List<Module> visibleCache;
 	private String visibleQuery = "";
 	private ModuleCategory visibleCategory;
@@ -135,6 +160,10 @@ public final class N4yMainScreen extends Screen {
 		}
 		if (search == null) {
 			search = TextFieldWidget.search(Component.translatable("n4y.search"));
+		}
+		if (resetSettings == null) {
+			resetSettings = new ButtonWidget(Component.translatable("n4y.settings.reset"), false,
+					() -> detailModule != null && detailModule.settings().stream().anyMatch(setting -> !setting.isDefault()));
 		}
 		if (openStudio == null) {
 			openStudio = new ButtonWidget(Component.translatable("n4y.hud.studio.open"), true, () -> true);
@@ -205,6 +234,36 @@ public final class N4yMainScreen extends Screen {
 	/** The module waiting for a key press, if the user is binding one. */
 	public Optional<Module> bindingModule() {
 		return Optional.ofNullable(bindingModule);
+	}
+
+	/** The module whose settings panel is open, if any. */
+	public Optional<Module> detailModule() {
+		return Optional.ofNullable(detailModule);
+	}
+
+	public List<SettingRowWidget> settingRows() {
+		return List.copyOf(settingRows);
+	}
+
+	/** Opens the settings panel of {@code module}; used by the interface and the tests. */
+	public void openDetail(Module module) {
+		detailModule = module;
+		bindingModule = null;
+		bindingSetting = null;
+		settingRows.clear();
+		for (Setting<?> setting : module.settings()) {
+			settingRows.add(new SettingRowWidget(setting, () -> bindingSetting == setting));
+		}
+		detailToggle.setInstant(module.isEnabled());
+		resetScroll();
+	}
+
+	public void closeDetail() {
+		detailModule = null;
+		bindingSetting = null;
+		draggingRow = null;
+		settingRows.clear();
+		resetScroll();
 	}
 
 	public Optional<ModuleCardWidget> cardOf(Module module) {
@@ -292,6 +351,10 @@ public final class N4yMainScreen extends Screen {
 		}
 
 		float offset = scroll.value(System.nanoTime());
+		if (detailModule != null) {
+			layoutDetail(offset);
+			return;
+		}
 		switch (tab) {
 			case MODULES -> {
 				List<Module> visible = visibleModules();
@@ -346,6 +409,25 @@ public final class N4yMainScreen extends Screen {
 		}
 	}
 
+	/** Places the settings panel: header, the rows that scroll, and the reset button. */
+	private void layoutDetail(float offset) {
+		float listTop = bodyY() + DETAIL_HEADER_H;
+		float listH = bodyH() - DETAIL_HEADER_H - FIELD_H - 6f;
+		float rowX = panelX + PAD + 6f;
+		float rowW = PANEL_W - PAD * 2 - 12f - SCROLLBAR_W;
+
+		backButton.bounds(panelX + PAD, bodyY() + 8f, 22f, 22f);
+		float total = 0f;
+		for (SettingRowWidget row : settingRows) {
+			float h = row.preferredHeight();
+			row.bounds(rowX, listTop + total - offset, rowW, h);
+			total += h + 2f;
+		}
+		maxScroll = Math.max(0f, total - 2f - listH);
+		scrollTarget = Math.max(0f, Math.min(scrollTarget, maxScroll));
+		resetSettings.bounds(panelX + PANEL_W - PAD - 110f, bodyY() + bodyH() - FIELD_H, 110f, FIELD_H);
+	}
+
 	/** Height of the scrollable profile list, leaving room for the creation bar below it. */
 	private float profileListHeight() {
 		return bodyH() - FIELD_H - 22f;
@@ -382,15 +464,19 @@ public final class N4yMainScreen extends Screen {
 		GlassRenderer.glassPanel(g, panelX, panelY, PANEL_W, PANEL_H, PANEL_R, t, a);
 		renderHeader(ctx);
 
-		switch (tab) {
-			case MODULES -> {
-				renderSidebar(ctx);
-				renderModules(ctx, virtualY(mouseY));
-			}
-			case HUD -> renderHud(ctx, virtualY(mouseY));
-			case PROFILES -> renderProfiles(ctx, virtualY(mouseY));
-			case APPEARANCE -> renderAppearance(ctx);
-			default -> {
+		if (detailModule != null) {
+			renderDetail(ctx, virtualY(mouseY));
+		} else {
+			switch (tab) {
+				case MODULES -> {
+					renderSidebar(ctx);
+					renderModules(ctx, virtualY(mouseY));
+				}
+				case HUD -> renderHud(ctx, virtualY(mouseY));
+				case PROFILES -> renderProfiles(ctx, virtualY(mouseY));
+				case APPEARANCE -> renderAppearance(ctx);
+				default -> {
+				}
 			}
 		}
 
@@ -478,6 +564,68 @@ public final class N4yMainScreen extends Screen {
 		renderScrollHints(ctx, cx, bodyY(), cw, bodyH());
 	}
 
+	private void renderDetail(UiContext ctx, float mouseY) {
+		Theme t = ctx.theme();
+		float a = ctx.alpha();
+		Module module = detailModule;
+
+		backButton.render(ctx);
+		IconTextures.draw(ctx.g(), module.icon(), panelX + PAD + 30f, bodyY() + 10.5f, 17f, Colors.fade(t.textPrimary(), a));
+		N4yText.draw(ctx.g(), module.displayName().getString(), panelX + PAD + 54f, bodyY() + 8f, 1.05f,
+				Colors.fade(t.textPrimary(), a), true);
+		N4yText.draw(ctx.g(), N4yText.ellipsize(module.description().getString(), false, 0.78f, PANEL_W - 220f),
+				panelX + PAD + 54f, bodyY() + 21f, 0.78f, Colors.fade(t.textSecondary(), a), false);
+
+		detailToggle.set(module.isEnabled(), ctx.now());
+		detailToggle.draw(ctx, detailToggleX(), bodyY() + 13f, 26f, 14f);
+		drawModuleKeyChip(ctx, module, a, t);
+
+		float listTop = bodyY() + DETAIL_HEADER_H;
+		float listH = bodyH() - DETAIL_HEADER_H - FIELD_H - 6f;
+		float listX = panelX + PAD;
+		float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
+
+		if (settingRows.isEmpty()) {
+			N4yText.drawCentered(ctx.g(), Component.translatable("n4y.settings.none").getString(),
+					listX + listW / 2f, listTop + listH / 2f, 0.85f, Colors.fade(t.textMuted(), a), false);
+		} else {
+			UiContext inner = new UiContext(ctx.g(), t, ctx.now(), a, ctx.mouseX(), mouseY);
+			ctx.g().enableScissor(Math.round(listX), Math.round(listTop), Math.round(listX + listW), Math.round(listTop + listH));
+			for (SettingRowWidget row : settingRows) {
+				if (row.y() + row.height() >= listTop - 2 && row.y() <= listTop + listH + 2) {
+					row.render(inner);
+				}
+			}
+			ctx.g().disableScissor();
+			renderScrollHints(ctx, listX, listTop, listW, listH);
+		}
+		resetSettings.render(ctx);
+	}
+
+	private float detailToggleX() {
+		return panelX + PANEL_W - PAD - 26f;
+	}
+
+	/** The module's own on/off key, shown next to its toggle in the settings panel. */
+	private void drawModuleKeyChip(UiContext ctx, Module module, float a, Theme t) {
+		boolean isBinding = bindingModule == module;
+		String label = isBinding
+				? Component.translatable("n4y.keybind.press").getString()
+				: module.key().displayName().getString();
+		float w = Math.min(96f, N4yText.width(label, false, 0.78f) + 14f);
+		float x = detailToggleX() - 8f - w;
+		float y = bodyY() + 13f;
+		GlassRenderer.roundedRect(ctx.g(), x, y, w, 14f, 5f,
+				Colors.fade(Colors.lerp(t.toggleOff(), t.accent(), isBinding ? 0.7f : 0f), a * 0.5f),
+				Colors.fade(Colors.lerp(t.toggleOff(), t.accent(), isBinding ? 0.5f : 0f), a * 0.4f),
+				GlassRenderer.CORNERS_ALL);
+		GlassRenderer.border(ctx.g(), x, y, w, 14f, 5f, 0.5f, Colors.fade(t.borderTop(), a), Colors.fade(t.borderBottom(), a));
+		N4yText.drawCentered(ctx.g(), label, x + w / 2f, y + 7f, 0.78f,
+				Colors.fade(module.hasKey() || isBinding ? t.textPrimary() : t.textMuted(), a), false);
+		moduleKeyChipX = x;
+		moduleKeyChipW = w;
+	}
+
 	private void renderHud(UiContext ctx, float mouseY) {
 		List<HudModule> elements = N4yClient.get().hud().elements();
 		float listX = panelX + PAD;
@@ -560,11 +708,36 @@ public final class N4yMainScreen extends Screen {
 			return super.mouseClicked(event, doubleClick);
 		}
 
+		if (bindingSetting != null) {
+			SettingRowWidget row = rowOf(bindingSetting);
+			if (row != null && row.contains(mx, my)) {
+				bindingSetting.set(InputBinding.mouse(event.button()));
+				bindingSetting = null;
+				return true;
+			}
+			bindingSetting = null;
+			if (!right) {
+				return true;
+			}
+		}
+
 		if (bindingModule != null) {
+			ModuleCardWidget card = cards.get(bindingModule);
+			boolean overChip = detailModule == bindingModule
+					&& mx >= moduleKeyChipX && mx <= moduleKeyChipX + moduleKeyChipW
+					&& my >= bodyY() + 13f && my <= bodyY() + 27f;
+			if (overChip || card != null && card.contains(mx, my)) {
+				bindKey(InputBinding.mouse(event.button()));
+				return true;
+			}
 			bindingModule = null;
 			if (!right) {
 				return true;
 			}
+		}
+
+		if (detailModule != null) {
+			return clickDetail(mx, my, event.button());
 		}
 
 		for (int i = 0; i < tabs.size(); i++) {
@@ -603,7 +776,9 @@ public final class N4yMainScreen extends Screen {
 				if (!card.contains(mx, my)) {
 					continue;
 				}
-				if (right || card.chipContains(mx, my)) {
+				if (card.chevronContains(mx, my)) {
+					openDetail(module);
+				} else if (right || card.chipContains(mx, my)) {
 					bindingModule = module;
 				} else {
 					card.toggle(System.nanoTime());
@@ -626,7 +801,9 @@ public final class N4yMainScreen extends Screen {
 				if (card == null || !card.contains(mx, my)) {
 					continue;
 				}
-				if (right || card.chipContains(mx, my)) {
+				if (card.chevronContains(mx, my)) {
+					openDetail(element);
+				} else if (right || card.chipContains(mx, my)) {
 					bindingModule = element;
 				} else {
 					card.toggle(System.nanoTime());
@@ -635,6 +812,50 @@ public final class N4yMainScreen extends Screen {
 			}
 		}
 		return false;
+	}
+
+	/** Clicks inside a module's settings panel. */
+	private boolean clickDetail(float mx, float my, int button) {
+		if (backButton.contains(mx, my)) {
+			closeDetail();
+			return true;
+		}
+		if (mx >= detailToggleX() && mx <= detailToggleX() + 26f && my >= bodyY() + 13f && my <= bodyY() + 27f) {
+			detailModule.toggle();
+			detailToggle.set(detailModule.isEnabled(), System.nanoTime());
+			return true;
+		}
+		if (mx >= moduleKeyChipX && mx <= moduleKeyChipX + moduleKeyChipW && my >= bodyY() + 13f && my <= bodyY() + 27f) {
+			bindingModule = detailModule;
+			return true;
+		}
+		if (resetSettings.contains(mx, my)) {
+			if (resetSettings.isUsable()) {
+				detailModule.resetSettings();
+			}
+			return true;
+		}
+		float listTop = bodyY() + DETAIL_HEADER_H;
+		float listH = bodyH() - DETAIL_HEADER_H - FIELD_H - 6f;
+		if (my < listTop || my > listTop + listH) {
+			return false;
+		}
+		for (SettingRowWidget row : settingRows) {
+			if (!row.contains(mx, my)) {
+				continue;
+			}
+			if (row.setting() instanceof KeySetting keySetting) {
+				bindingSetting = keySetting;
+			} else if (row.click(mx, my)) {
+				draggingRow = row.isDragging() ? row : null;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	private SettingRowWidget rowOf(Setting<?> setting) {
+		return settingRows.stream().filter(row -> row.setting() == setting).findFirst().orElse(null);
 	}
 
 	private boolean clickProfiles(float mx, float my) {
@@ -696,6 +917,7 @@ public final class N4yMainScreen extends Screen {
 			return;
 		}
 		tab = next;
+		closeDetail();
 		bindingModule = null;
 		search.setFocused(false);
 		profileName.setFocused(false);
@@ -708,6 +930,25 @@ public final class N4yMainScreen extends Screen {
 	private void resetScroll() {
 		scrollTarget = 0f;
 		scroll.set(0f);
+	}
+
+	@Override
+	public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+		if (draggingRow != null) {
+			draggingRow.drag(virtualX(event.x()));
+			return true;
+		}
+		return super.mouseDragged(event, dragX, dragY);
+	}
+
+	@Override
+	public boolean mouseReleased(MouseButtonEvent event) {
+		if (draggingRow != null) {
+			draggingRow.release();
+			draggingRow = null;
+			return true;
+		}
+		return super.mouseReleased(event);
 	}
 
 	@Override
@@ -738,8 +979,17 @@ public final class N4yMainScreen extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+		if (bindingSetting != null) {
+			bindingSetting.set(event.key() == GLFW.GLFW_KEY_ESCAPE ? InputBinding.UNBOUND : InputBinding.key(event.key()));
+			bindingSetting = null;
+			return true;
+		}
 		if (bindingModule != null) {
-			bindKey(event.key());
+			bindKey(event.key() == GLFW.GLFW_KEY_ESCAPE ? InputBinding.UNBOUND : InputBinding.key(event.key()));
+			return true;
+		}
+		if (detailModule != null && event.key() == GLFW.GLFW_KEY_ESCAPE) {
+			closeDetail();
 			return true;
 		}
 		TextFieldWidget field = focusedField();
@@ -775,14 +1025,13 @@ public final class N4yMainScreen extends Screen {
 		return super.keyPressed(event);
 	}
 
-	/** Escape clears the bind, any other key becomes the module's shortcut. */
-	private void bindKey(int key) {
+	/** Escape clears the bind, any other key or mouse button becomes the module's shortcut. */
+	private void bindKey(InputBinding binding) {
 		Module module = bindingModule;
 		bindingModule = null;
-		if (module == null) {
-			return;
+		if (module != null) {
+			module.setKey(binding);
 		}
-		module.setKey(key == GLFW.GLFW_KEY_ESCAPE ? Module.UNBOUND : key);
 	}
 
 	private TextFieldWidget focusedField() {

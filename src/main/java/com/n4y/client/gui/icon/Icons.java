@@ -176,6 +176,15 @@ public final class Icons {
 			.line(3.5f, 12, 20.5f, 12)
 			.build();
 
+	public static final Icon CHEVRON_RIGHT = Icon.of("chevron_right")
+			.line(9.5f, 5.5f, 16, 12, 9.5f, 18.5f)
+			.build();
+
+	public static final Icon ARROW_LEFT = Icon.of("arrow_left")
+			.line(20.5f, 12, 4.5f, 12)
+			.line(11f, 5.5f, 4.5f, 12, 11f, 18.5f)
+			.build();
+
 	private Icons() {
 	}
 }

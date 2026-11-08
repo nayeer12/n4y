@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import com.mojang.serialization.JsonOps;
 import com.n4y.client.gui.hud.HudAnchor;
 import com.n4y.client.gui.hud.HudPlacement;
-import com.n4y.client.module.Module;
+import com.n4y.client.core.input.InputBinding;
 
 class ProfileTest {
 	@Test
@@ -34,12 +34,12 @@ class ProfileTest {
 
 	@Test
 	void codecRoundTrip() {
-		Profile profile = new Profile("PvP", "pink", Map.of("zoom", new ModuleState(true, 86, Optional.empty())));
+		Profile profile = new Profile("PvP", "pink", Map.of("zoom", new ModuleState(true, InputBinding.key(86), Optional.empty(), Map.of())));
 		var json = Profile.CODEC.encodeStart(JsonOps.INSTANCE, profile).getOrThrow();
 		Profile back = Profile.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(profile, back);
-		assertEquals(86, back.state("zoom").key());
-		assertEquals(Module.UNBOUND, back.state("missing").key());
+		assertEquals(InputBinding.key(86), back.state("zoom").key());
+		assertEquals(InputBinding.UNBOUND, back.state("missing").key());
 		assertFalse(back.state("missing").enabled());
 	}
 
@@ -47,7 +47,7 @@ class ProfileTest {
 	void hudPlacementSurvivesTheRoundTrip() {
 		HudPlacement placement = HudPlacement.of(HudAnchor.BOTTOM_RIGHT, -8f, -12f);
 		Profile profile = new Profile("Creator", "green",
-				Map.of("coordinates", new ModuleState(true, Module.UNBOUND, Optional.of(placement))));
+				Map.of("coordinates", new ModuleState(true, InputBinding.UNBOUND, Optional.of(placement), Map.of())));
 		var json = Profile.CODEC.encodeStart(JsonOps.INSTANCE, profile).getOrThrow();
 		Profile back = Profile.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(Optional.of(placement), back.state("coordinates").hud());

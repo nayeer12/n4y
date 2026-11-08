@@ -8,6 +8,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
@@ -16,7 +17,7 @@ import com.n4y.client.module.ModuleManager;
 import net.minecraft.client.Minecraft;
 
 class KeybindManagerTest {
-	private static final int KEY_V = 86;
+	private static final InputBinding KEY_V = InputBinding.key(86);
 
 	private static final class Fake extends Module {
 		Fake(String id) {
@@ -41,7 +42,7 @@ class KeybindManagerTest {
 
 	@Test
 	void togglesOnceWhileTheKeyIsHeld() {
-		Set<Integer> down = new HashSet<>();
+		Set<InputBinding> down = new HashSet<>();
 		ModuleManager modules = new ModuleManager();
 		Fake module = boundModule(modules);
 		KeybindManager keybinds = new KeybindManager(modules, down::contains);
@@ -65,7 +66,7 @@ class KeybindManagerTest {
 
 	@Test
 	void ignoresKeysWhileAScreenIsOpen() {
-		Set<Integer> down = new HashSet<>();
+		Set<InputBinding> down = new HashSet<>();
 		ModuleManager modules = new ModuleManager();
 		Fake module = boundModule(modules);
 		KeybindManager keybinds = new KeybindManager(modules, down::contains);
@@ -89,7 +90,7 @@ class KeybindManagerTest {
 		ModuleManager modules = new ModuleManager();
 		Fake module = new Fake("zoom");
 		modules.register(module);
-		KeybindManager keybinds = new KeybindManager(modules, key -> true);
+		KeybindManager keybinds = new KeybindManager(modules, binding -> true);
 		keybinds.tick(true);
 		assertFalse(module.isEnabled());
 	}

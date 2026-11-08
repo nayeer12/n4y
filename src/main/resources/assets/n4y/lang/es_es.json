@@ -96,5 +96,8 @@
 	"n4y.module.performance": "Rendimiento",
 	"n4y.module.performance.desc": "FPS y memoria en uso.",
 	"n4y.module.session_stats": "Estadísticas",
-	"n4y.module.session_stats.desc": "Tiempo de sesión y perfil."
+	"n4y.module.session_stats.desc": "Tiempo de sesión y perfil.",
+	"n4y.settings.reset": "Restablecer",
+	"n4y.settings.none": "Este módulo no tiene ajustes.",
+	"n4y.key.none": "Sin asignar"
 }

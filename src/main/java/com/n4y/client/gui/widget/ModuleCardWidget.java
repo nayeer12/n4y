@@ -2,10 +2,10 @@ package com.n4y.client.gui.widget;
 
 import java.util.function.BooleanSupplier;
 
-import com.n4y.client.core.keybind.KeybindManager;
 import com.n4y.client.gui.anim.Animation;
 import com.n4y.client.gui.anim.Easing;
 import com.n4y.client.gui.icon.IconTextures;
+import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.render.Colors;
 import com.n4y.client.gui.render.GlassRenderer;
 import com.n4y.client.gui.render.N4yText;
@@ -24,6 +24,8 @@ public final class ModuleCardWidget extends N4yWidget {
 	private static final float TOGGLE_H = 13f;
 	private static final float CHIP_H = 12f;
 	private static final float CHIP_MAX_W = 46f;
+	/** Width taken by the arrow that opens the settings panel. */
+	private static final float CHEVRON_W = 11f;
 
 	private final Module module;
 	private final BooleanSupplier binding;
@@ -65,15 +67,25 @@ public final class ModuleCardWidget extends N4yWidget {
 		if (binding.getAsBoolean()) {
 			return "…";
 		}
-		return module.hasKey() ? KeybindManager.displayName(module.key()).getString() : "+";
+		return module.hasKey() ? module.key().displayName().getString() : "+";
 	}
 
 	private float chipWidth() {
 		return Math.min(CHIP_MAX_W, N4yText.width(chipLabel(), false, 0.72f) + 11f);
 	}
 
+	/** Space kept on the right edge for the toggle and, when there are settings, the arrow. */
+	private float rightInset() {
+		return 12f + (module.hasSettings() ? CHEVRON_W : 0f);
+	}
+
 	private float chipX() {
-		return x + width - 12f - TOGGLE_W - 7f - chipWidth();
+		return x + width - rightInset() - TOGGLE_W - 7f - chipWidth();
+	}
+
+	/** True when the cursor is over the arrow that opens this module's settings. */
+	public boolean chevronContains(double mx, double my) {
+		return module.hasSettings() && contains(mx, my) && mx >= x + width - CHEVRON_W - 6f;
 	}
 
 	/** True when the cursor is over the key chip, which opens the key binding. */
@@ -103,7 +115,7 @@ public final class ModuleCardWidget extends N4yWidget {
 
 		boolean showChip = module.hasKey() || isBinding || hovered > 0.35f;
 		float textX = x + 11 + ICON + 9;
-		float textW = width - (textX - x) - 12f - TOGGLE_W - 7f - (showChip ? chipWidth() + 6f : 0f);
+		float textW = width - (textX - x) - rightInset() - TOGGLE_W - 7f - (showChip ? chipWidth() + 6f : 0f);
 
 		String name = module.displayName().getString();
 		String desc = isBinding
@@ -124,7 +136,13 @@ public final class ModuleCardWidget extends N4yWidget {
 		if (showChip) {
 			drawChip(ctx, isBinding, hovered, a, t);
 		}
-		toggle.draw(ctx, x + width - 12 - TOGGLE_W, y + (height - TOGGLE_H) / 2f, TOGGLE_W, TOGGLE_H);
+		toggle.draw(ctx, x + width - rightInset() - TOGGLE_W, y + (height - TOGGLE_H) / 2f, TOGGLE_W, TOGGLE_H);
+
+		if (module.hasSettings()) {
+			boolean over = chevronContains(ctx.mouseX(), ctx.mouseY());
+			IconTextures.draw(ctx.g(), Icons.CHEVRON_RIGHT, x + width - CHEVRON_W - 3f, y + (height - 10f) / 2f, 10f,
+					Colors.fade(over ? t.textPrimary() : t.textMuted(), a));
+		}
 	}
 
 	private void drawChip(UiContext ctx, boolean isBinding, float hovered, float a, Theme t) {

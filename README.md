@@ -48,6 +48,8 @@ gui/
 ├── theme/                Theme, Themes (Púrpura/Azul/Rosa/Verde), ThemeEngine (transición animada)
 └── screen/               N4yMainScreen (interfaz principal)
 module/                   Module, ModuleCategory, ModuleManager + módulos en impl/
+module/setting/           ajustes tipados: booleano, número, rango y tecla
+core/input/               InputBinding (teclado y ratón, compatible con perfiles antiguos)
 config/                   ConfigManager, Profile, ClientPrefs, ModuleState
 core/keybind/             KeybindManager (teclas propias, sin mixins)
 mixin/                    4 mixins: brillo, sacudida, manos y llamas
@@ -76,6 +78,23 @@ módulos cambian el juego de verdad y lo dejan como estaba. Las capturas quedan 
 
 </details>
 
+## Combat (en desarrollo)
+
+n4y está incorporando una categoría de Combat orientada a Crystal PvP. Alcance, sin rodeos:
+
+**Para Singleplayer y mundos privados.** No se afirma compatibilidad con servidores públicos ni
+que las automatizaciones sean indetectables, porque no lo son y no se diseñan para serlo.
+
+Reglas que cumple todo Combat:
+
+- La cámara la mueve el jugador. Los módulos actúan sobre el punto de mira, nunca rotan solos.
+- Los cambios de slot, las interacciones y las animaciones son visibles.
+- El inventario solo se toca con la pantalla abierta de verdad. Sin inventarios falsos.
+- Se respetan los cooldowns y los límites normales del juego.
+- Nada de clics simulados, cadenas cifradas ni funciones para evadir detecciones.
+
+Estado: Fase 0 (sistema de ajustes) terminada. Los módulos llegan después, uno a uno.
+
 ## Configuración y perfiles
 
 Todo se guarda solo en `.minecraft/config/n4y/`:
@@ -92,7 +111,10 @@ Un perfil guarda el tema y el estado de cada módulo con su tecla, así que camb
 cambia el cliente entero de golpe. Se escribe como mucho una vez por segundo y en un hilo
 aparte, así que activar un módulo nunca frena el juego.
 
-Teclas: clic derecho en un módulo, pulsa la tecla que quieras, y Esc la quita. Las teclas viven
+Cada módulo puede tener sus propios ajustes: se abren con la flecha de su tarjeta y se guardan
+en el perfil, escribiendo solo lo que has cambiado.
+
+Teclas: clic derecho en un módulo, pulsa la tecla o el botón del ratón que quieras, y Esc la quita. Las teclas viven
 en el perfil, no en las opciones de Minecraft, así que viajan contigo al cambiar de perfil.
 
 ![Perfiles y teclas](docs/screenshots/fase5-perfiles-keybinds.png)

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.theme.ThemeEngine;
 import com.n4y.client.gui.theme.Themes;
@@ -63,7 +64,7 @@ class ConfigManagerTest {
 	@Test
 	void savesAndReloadsThemeAndModules() {
 		zoom.setEnabled(true);
-		zoom.setKey(86); // V
+		zoom.setKey(InputBinding.key(86)); // V
 		themes.select(Themes.GREEN);
 		config.markDirty();
 		config.flush();
@@ -81,7 +82,7 @@ class ConfigManagerTest {
 		reloaded.applyToGame();
 
 		assertTrue(freshZoom.isEnabled(), "the enabled module was not restored");
-		assertEquals(86, freshZoom.key(), "the key bind was not restored");
+		assertEquals(InputBinding.key(86), freshZoom.key(), "the key bind was not restored");
 		assertEquals(Themes.GREEN.id(), freshThemes.selected().id(), "the theme was not restored");
 		reloaded.shutdown();
 	}

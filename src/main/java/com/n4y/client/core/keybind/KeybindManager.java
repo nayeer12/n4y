@@ -3,12 +3,11 @@ package com.n4y.client.core.keybind;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.mojang.blaze3d.platform.InputConstants;
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleManager;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.Component;
 
 /**
  * Per-module keys. n4y stores its own binds in its profile instead of vanilla's options file,
@@ -19,24 +18,24 @@ import net.minecraft.network.chat.Component;
  * nothing fires while a screen is open.
  */
 public final class KeybindManager {
-	/** Where the key states come from; swapped in the tests. */
+	/** Where the input states come from; swapped in the tests. */
 	@FunctionalInterface
-	public interface KeyState {
-		boolean isDown(int keyCode);
+	public interface InputState {
+		boolean isDown(InputBinding binding);
 	}
 
 	private final ModuleManager modules;
-	private final KeyState keys;
-	private final Set<Integer> held = new HashSet<>();
+	private final InputState input;
+	private final Set<InputBinding> held = new HashSet<>();
 
-	public KeybindManager(ModuleManager modules, KeyState keys) {
+	public KeybindManager(ModuleManager modules, InputState input) {
 		this.modules = modules;
-		this.keys = keys;
+		this.input = input;
 	}
 
-	/** Reads the real keyboard of the running game. */
+	/** Reads the real keyboard and mouse of the running game. */
 	public static KeybindManager forGame(ModuleManager modules, Minecraft mc) {
-		return new KeybindManager(modules, key -> InputConstants.isKeyDown(mc.getWindow(), key));
+		return new KeybindManager(modules, binding -> binding.isDown(mc.getWindow()));
 	}
 
 	/**
@@ -48,8 +47,8 @@ public final class KeybindManager {
 			if (!module.hasKey()) {
 				continue;
 			}
-			int key = module.key();
-			boolean down = keys.isDown(key);
+			InputBinding key = module.key();
+			boolean down = input.isDown(key);
 			boolean wasDown = held.contains(key);
 			if (down && !wasDown && allowed) {
 				module.toggle();
@@ -60,10 +59,5 @@ public final class KeybindManager {
 				held.remove(key);
 			}
 		}
-	}
-
-	/** Human readable name of a key code, e.g. {@code V} or {@code Left Shift}. */
-	public static Component displayName(int keyCode) {
-		return InputConstants.Type.KEYSYM.getOrCreate(keyCode).getDisplayName();
 	}
 }

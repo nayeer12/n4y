@@ -8,13 +8,16 @@ import java.util.List;
 import org.lwjgl.glfw.GLFW;
 
 import com.n4y.client.N4yClient;
+import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.gui.hud.HudModule;
 import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.screen.HudStudioScreen;
 import com.n4y.client.gui.screen.N4yMainScreen;
 import com.n4y.client.gui.theme.Theme;
 import com.n4y.client.gui.theme.Themes;
+import com.n4y.client.gui.widget.ModuleCardWidget;
 import com.n4y.client.gui.widget.N4yWidget;
+import com.n4y.client.gui.widget.SettingRowWidget;
 import com.n4y.client.gui.widget.ProfileRowWidget;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
@@ -50,6 +53,7 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 			testSearch(context);
 			testToggleAndScroll(context);
 			testKeybinding(context);
+			testSettingsPanel(context);
 			testHudAndCreatorTools(context);
 			testProfiles(context);
 			testAppearance(context);
@@ -137,11 +141,86 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 		context.waitTicks(6);
 		check(context, s -> s.bindingModule().isEmpty(), "the key binding did not finish");
 		context.runOnClient(mc -> {
-			if (zoom.key() != GLFW.GLFW_KEY_V) {
+			if (!zoom.key().equals(InputBinding.key(GLFW.GLFW_KEY_V))) {
 				throw new AssertionError("Zoom was not bound to V, got " + zoom.key());
 			}
 		});
 		context.takeScreenshot("n4y-07-key-bound");
+	}
+
+	/**
+	 * The settings panel: reach it from a card, move a slider with the real cursor and check
+	 * the value is still there after the profile is written and read back.
+	 */
+	private void testSettingsPanel(ClientGameTestContext context) {
+		SettingsProbeModule probe = new SettingsProbeModule();
+		context.runOnClient(mc -> {
+			N4yClient.get().modules().register(probe);
+			mc.setScreen(new N4yMainScreen());
+		});
+		context.waitTicks(8);
+
+		// Filter down to the probe and open its settings with the arrow on the card.
+		click(context, screen(context).searchBox());
+		context.getInput().typeChars("probe");
+		context.waitTicks(6);
+		ModuleCardWidget card = context.computeOnClient(mc -> screen(mc).cardOf(probe).orElseThrow());
+		double[] arrow = context.computeOnClient(mc -> screen(mc).toWindowPixels(
+				card.x() + card.width() - 8f, card.y() + card.height() / 2f));
+		context.getInput().setCursorPos(arrow[0], arrow[1]);
+		context.waitTick();
+		context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(8);
+		check(context, s -> s.detailModule().filter(m -> m == probe).isPresent(),
+				"the arrow on the card did not open the settings panel");
+		context.takeScreenshot("n4y-13-settings");
+
+		// Drag the number slider to its far end.
+		SettingRowWidget numberRow = context.computeOnClient(mc -> screen(mc).settingRows().stream()
+				.filter(row -> row.setting() == probe.number).findFirst().orElseThrow());
+		double[] farEnd = context.computeOnClient(mc -> screen(mc).toWindowPixels(
+				numberRow.x() + numberRow.width() - 36f, numberRow.y() + numberRow.height() / 2f));
+		context.getInput().setCursorPos(farEnd[0], farEnd[1]);
+		context.waitTick();
+		context.getInput().pressMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(6);
+		context.runOnClient(mc -> {
+			if (probe.number.value() != 20) {
+				throw new AssertionError("Dragging the slider to the end gave " + probe.number.value() + ", expected 20");
+			}
+		});
+		context.takeScreenshot("n4y-14-settings-changed");
+
+		// Written to the profile and read back.
+		context.runOnClient(mc -> {
+			N4yClient.get().config().markDirty();
+			N4yClient.get().config().flush();
+			Path file = FabricLoader.getInstance().getConfigDir().resolve("n4y/profiles/default.json");
+			String json;
+			try {
+				json = Files.readString(file);
+			} catch (IOException e) {
+				throw new AssertionError("Could not read the profile", e);
+			}
+			if (!json.contains("probe_number")) {
+				throw new AssertionError("The changed setting was not written:\n" + json);
+			}
+			probe.number.set(0);
+			N4yClient.get().config().loadFromDisk();
+			N4yClient.get().config().applyToGame();
+			if (probe.number.value() != 20) {
+				throw new AssertionError("The setting did not come back from the profile");
+			}
+			probe.resetSettings();
+		});
+
+		context.runOnClient(mc -> screen(mc).closeDetail());
+		context.waitTicks(4);
+		check(context, s -> s.detailModule().isEmpty(), "the settings panel did not close");
+		for (int i = 0; i < 5; i++) {
+			context.getInput().pressKey(GLFW.GLFW_KEY_BACKSPACE);
+		}
+		context.waitTicks(4);
 	}
 
 	/** The on-screen elements, the HUD Studio and the creator tools. */
@@ -325,7 +404,8 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 			} catch (IOException e) {
 				throw new AssertionError("The profile file was not written to " + file, e);
 			}
-			if (!json.contains("\"key\": " + GLFW.GLFW_KEY_V)) {
+			// Binds are written as an object now: { "type": "key", "code": 86 }
+			if (!json.contains("\"code\": " + GLFW.GLFW_KEY_V) || !json.contains("\"type\": \"key\"")) {
 				throw new AssertionError("The key bind was not stored:\n" + json);
 			}
 			if (!json.contains("\"zoom\"")) {

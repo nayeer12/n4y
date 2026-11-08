@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
+import com.n4y.client.module.setting.Setting;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
@@ -90,6 +91,14 @@ public final class ConfigManager {
 				module.setKey(state.key());
 				if (module instanceof HudModule hud) {
 					state.hud().ifPresentOrElse(hud::setPlacement, hud::resetPlacement);
+				}
+				// Settings first: enabling a module may already depend on them.
+				module.resetSettings();
+				for (Setting<?> setting : module.settings()) {
+					JsonElement stored = state.settings().get(setting.id());
+					if (stored != null) {
+						setting.load(stored);
+					}
 				}
 				module.setEnabled(state.enabled());
 			}
