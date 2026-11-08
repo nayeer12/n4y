@@ -20,7 +20,7 @@ Instalar: copia `build/libs/n4y-client-1.0.0.jar` y Fabric API `0.141.6+1.21.11`
 | Fase | Contenido | Estado |
 |---|---|---|
 | 1 | Fundación Fabric: entrypoint, EventBus, keybinds, rutas de config | ✅ |
-| 2 | Motor gráfico Glass | ⏳ |
+| 2 | Motor gráfico Glass: formas redondeadas AA, sombras, brillos, 4 temas, animaciones, Inter | ✅ |
 | 3 | Interfaz principal | — |
 | 4 | Sistema de módulos | — |
 | 5 | Configuraciones y perfiles | — |
@@ -39,4 +39,20 @@ src/main/java/com/n4y/client/
     ├── event/            EventBus sin reflexión + eventos
     ├── keybind/          keybinds globales (categoría "n4y Client")
     └── io/               rutas en .minecraft/config/n4y/
+gui/
+├── anim/                 Animation + Easing (basadas en tiempo, independientes de FPS)
+├── render/               GlassRenderer, ShapeTextures (máscaras AA generadas), N4yText (Inter)
+├── theme/                Theme, Themes (Púrpura/Azul/Rosa/Verde), ThemeEngine (transición animada)
+└── screen/               pantallas
+src/gametest/             pruebas dentro del juego (Fabric Client GameTest)
 ```
+
+## Pruebas dentro del juego
+
+```bash
+xvfb-run ./gradlew runClientGameTest   # o sin xvfb en un escritorio
+```
+
+Crea un mundo Singleplayer, abre la interfaz y guarda capturas en `build/run/clientGameTest/screenshots/`.
+
+![Motor Glass en los 4 temas](docs/screenshots/fase2-motor-glass.png)
