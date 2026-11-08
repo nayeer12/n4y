@@ -5,8 +5,9 @@ import com.n4y.client.core.event.events.ClientShutdownEvent;
 import com.n4y.client.core.event.events.ClientTickEvent;
 import com.n4y.client.core.io.N4yPaths;
 import com.n4y.client.core.keybind.N4yKeybinds;
-import com.n4y.client.gui.screen.GlassPreviewScreen;
+import com.n4y.client.gui.screen.N4yMainScreen;
 import com.n4y.client.gui.theme.ThemeEngine;
+import com.n4y.client.module.ModuleManager;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
@@ -21,6 +22,7 @@ public final class N4yClient implements ClientModInitializer {
 
 	private final EventBus eventBus = new EventBus();
 	private final ThemeEngine themeEngine = new ThemeEngine();
+	private final ModuleManager moduleManager = new ModuleManager();
 
 	public static N4yClient get() {
 		return instance;
@@ -34,6 +36,10 @@ public final class N4yClient implements ClientModInitializer {
 		return themeEngine;
 	}
 
+	public ModuleManager modules() {
+		return moduleManager;
+	}
+
 	@Override
 	public void onInitializeClient() {
 		instance = this;
@@ -41,7 +47,9 @@ public final class N4yClient implements ClientModInitializer {
 
 		N4yPaths.ensureCreated();
 		N4yKeybinds.register();
-		N4yKeybinds.onOpenGui(mc -> mc.setScreen(new GlassPreviewScreen()));
+		moduleManager.registerDefaults();
+		moduleManager.attach(eventBus);
+		N4yKeybinds.onOpenGui(mc -> mc.setScreen(new N4yMainScreen()));
 
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			N4yKeybinds.tick(mc);

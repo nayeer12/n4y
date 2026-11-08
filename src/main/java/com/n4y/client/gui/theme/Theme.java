@@ -3,6 +3,7 @@ package com.n4y.client.gui.theme;
 /**
  * Full color palette of one Glass theme. All values are ARGB.
  *
+ * @param id             stable identifier, also the translation key suffix
  * @param accent         main accent (active toggles, selection, logo)
  * @param accentGlow     translucent accent used for glows behind active elements
  * @param backdropTop    tint over the blurred world, top of the screen
@@ -21,7 +22,6 @@ package com.n4y.client.gui.theme;
  */
 public record Theme(
 		String id,
-		String displayName,
 		int accent,
 		int accentGlow,
 		int backdropTop,
@@ -38,6 +38,11 @@ public record Theme(
 		int textMuted,
 		int toggleOff) {
 
+	/** Localised name shown in the appearance tab. */
+	public net.minecraft.network.chat.Component displayName() {
+		return net.minecraft.network.chat.Component.translatable("n4y.theme." + id);
+	}
+
 	/** Interpolates every color, used for animated theme switches. */
 	public static Theme lerp(Theme a, Theme b, float t) {
 		if (t <= 0f) {
@@ -46,7 +51,7 @@ public record Theme(
 		if (t >= 1f) {
 			return b;
 		}
-		return new Theme(b.id, b.displayName,
+		return new Theme(b.id,
 				c(a.accent, b.accent, t), c(a.accentGlow, b.accentGlow, t),
 				c(a.backdropTop, b.backdropTop, t), c(a.backdropBottom, b.backdropBottom, t),
 				c(a.panelTop, b.panelTop, t), c(a.panelBottom, b.panelBottom, t),

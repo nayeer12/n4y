@@ -51,6 +51,16 @@ public final class N4yText {
 		g.pose().popMatrix();
 	}
 
+	/** Draws with the text vertically centred on {@code centerY}. */
+	public static void drawMiddle(GuiGraphics g, String text, float x, float centerY, float scale, int color, boolean bold) {
+		draw(g, text, x, centerY - 4.5f * scale, scale, color, bold);
+	}
+
+	/** Draws centred on {@code centerX} and {@code centerY}. */
+	public static void drawCentered(GuiGraphics g, String text, float centerX, float centerY, float scale, int color, boolean bold) {
+		draw(g, text, centerX - width(text, bold, scale) / 2f, centerY - 4.5f * scale, scale, color, bold);
+	}
+
 	/** Trims {@code text} with an ellipsis so it fits in {@code maxWidth} GUI units. */
 	public static String ellipsize(String text, boolean bold, float scale, float maxWidth) {
 		if (width(text, bold, scale) <= maxWidth) {
@@ -62,5 +72,18 @@ public final class N4yText {
 			end--;
 		}
 		return text.substring(0, end) + dots;
+	}
+
+	/** Trims from the left, keeping the end visible: what a text field shows while typing. */
+	public static String ellipsizeStart(String text, boolean bold, float scale, float maxWidth) {
+		if (width(text, bold, scale) <= maxWidth) {
+			return text;
+		}
+		String dots = "…";
+		int start = 0;
+		while (start < text.length() && width(dots + text.substring(start), bold, scale) > maxWidth) {
+			start++;
+		}
+		return dots + text.substring(start);
 	}
 }

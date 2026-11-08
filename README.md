@@ -21,8 +21,8 @@ Instalar: copia `build/libs/n4y-client-1.0.0.jar` y Fabric API `0.141.6+1.21.11`
 |---|---|---|
 | 1 | Fundación Fabric: entrypoint, EventBus, keybinds, rutas de config | ✅ |
 | 2 | Motor gráfico Glass: formas redondeadas AA, sombras, brillos, 4 temas, animaciones, Inter | ✅ |
-| 3 | Interfaz principal | — |
-| 4 | Sistema de módulos | — |
+| 3 | Interfaz principal: cabecera, pestañas, buscador, categorías, cuadrícula con scroll | ✅ |
+| 4 | Sistema de módulos: base (`Module`, `ModuleManager`) ✅ · keybinds por módulo ⏳ |
 | 5 | Configuraciones y perfiles | — |
 | 6 | Módulos individuales | — |
 | 7 | Herramientas premium | — |
@@ -40,10 +40,13 @@ src/main/java/com/n4y/client/
     ├── keybind/          keybinds globales (categoría "n4y Client")
     └── io/               rutas en .minecraft/config/n4y/
 gui/
+├── icon/                 iconos de línea vectoriales rasterizados al vuelo
+├── widget/               tarjetas, interruptores, pestañas, buscador, barra lateral
 ├── anim/                 Animation + Easing (basadas en tiempo, independientes de FPS)
 ├── render/               GlassRenderer, ShapeTextures (máscaras AA generadas), N4yText (Inter)
 ├── theme/                Theme, Themes (Púrpura/Azul/Rosa/Verde), ThemeEngine (transición animada)
-└── screen/               pantallas
+└── screen/               N4yMainScreen (interfaz principal)
+module/                   Module, ModuleCategory, ModuleManager + módulos en impl/
 src/gametest/             pruebas dentro del juego (Fabric Client GameTest)
 ```
 
@@ -55,4 +58,27 @@ xvfb-run ./gradlew runClientGameTest   # o sin xvfb en un escritorio
 
 Crea un mundo Singleplayer, abre la interfaz y guarda capturas en `build/run/clientGameTest/screenshots/`.
 
+![Interfaz de n4y](docs/screenshots/fase3-interfaz.png)
+
+<details>
+<summary>Motor Glass en los 4 temas (Fase 2)</summary>
+
 ![Motor Glass en los 4 temas](docs/screenshots/fase2-motor-glass.png)
+
+</details>
+
+## Módulos incluidos
+
+Todos usan API pública de Minecraft, sin mixins, y restauran tus ajustes al desactivarse.
+
+| Módulo | Categoría | Qué hace |
+|---|---|---|
+| AutoSprint | Movimiento | Corre solo al avanzar |
+| AutoJump | Movimiento | Activa el salto automático de vanilla |
+| Agacharse fijo | Jugador | Agacharse pasa a ser un interruptor |
+| Zoom | Visual | Baja el FOV a 30° |
+| Sin balanceo | Visual | Quita el balanceo de cámara al andar |
+| Cámara cine | Visual | Cámara suave de vanilla para grabar |
+| Ocultar HUD | Visual | Oculta la interfaz del juego |
+
+Combate, Mundo y Varios están vacías a propósito: sus módulos llegan en la Fase 6.

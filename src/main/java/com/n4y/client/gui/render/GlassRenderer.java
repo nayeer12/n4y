@@ -2,7 +2,6 @@ package com.n4y.client.gui.render;
 
 import com.n4y.client.gui.theme.Theme;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.RenderPipelines;
 
@@ -22,7 +21,7 @@ public final class GlassRenderer {
 	}
 
 	private static float scale() {
-		return Minecraft.getInstance().getWindow().getGuiScale();
+		return UiScale.physical();
 	}
 
 	private static void push(GuiGraphics g, float s) {

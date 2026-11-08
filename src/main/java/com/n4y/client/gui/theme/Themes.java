@@ -8,7 +8,7 @@ import java.util.Optional;
  * Values were picked from the reference design: dark tinted glass, bright accent, white text.
  */
 public final class Themes {
-	public static final Theme PURPLE = new Theme("purple", "Púrpura",
+	public static final Theme PURPLE = new Theme("purple",
 			0xFF8B6CFF, 0x668B6CFF,
 			0x8C1A1238, 0xB30C0A1F,
 			0x9E2B2357, 0xB01A1640,
@@ -16,7 +16,7 @@ public final class Themes {
 			0x66FFFFFF, 0x1AFFFFFF,
 			0xFFFFFFFF, 0xC4D9D3FF, 0x8CC7BFF5, 0x55FFFFFF);
 
-	public static final Theme BLUE = new Theme("blue", "Azul",
+	public static final Theme BLUE = new Theme("blue",
 			0xFF3EA6FF, 0x663EA6FF,
 			0x8C0E1A38, 0xB3070F22,
 			0x9E1B2D57, 0xB0111F42,
@@ -24,7 +24,7 @@ public final class Themes {
 			0x66FFFFFF, 0x1AFFFFFF,
 			0xFFFFFFFF, 0xC4CFE3FF, 0x8CB5CBF0, 0x55FFFFFF);
 
-	public static final Theme PINK = new Theme("pink", "Rosa",
+	public static final Theme PINK = new Theme("pink",
 			0xFFF25CD6, 0x66F25CD6,
 			0x8C2A1033, 0xB314081C,
 			0x9E44204F, 0xB02E163A,
@@ -32,7 +32,7 @@ public final class Themes {
 			0x66FFFFFF, 0x1AFFFFFF,
 			0xFFFFFFFF, 0xC4F3D3F0, 0x8CE5BCE0, 0x55FFFFFF);
 
-	public static final Theme GREEN = new Theme("green", "Verde",
+	public static final Theme GREEN = new Theme("green",
 			0xFF8EE84A, 0x668EE84A,
 			0x8C102414, 0xB307140A,
 			0x9E1F3D22, 0xB0142A17,
