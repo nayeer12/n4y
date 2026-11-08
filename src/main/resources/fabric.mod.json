@@ -4,13 +4,23 @@
 	"version": "${version}",
 	"name": "n4y Client",
 	"description": "Cliente personal Liquid Glass para Singleplayer y mundos privados.",
-	"authors": ["4xyns"],
+	"authors": [
+		"4xyns"
+	],
 	"license": "GPL-3.0-or-later",
 	"icon": "assets/n4y/icon.png",
 	"environment": "client",
 	"entrypoints": {
-		"client": ["com.n4y.client.N4yClient"]
+		"client": [
+			"com.n4y.client.N4yClient"
+		]
 	},
+	"mixins": [
+		{
+			"config": "n4y.mixins.json",
+			"environment": "client"
+		}
+	],
 	"depends": {
 		"fabricloader": ">=0.20.1",
 		"minecraft": "1.21.11",

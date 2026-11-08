@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
 import com.mojang.serialization.JsonOps;
+import com.n4y.client.gui.hud.HudAnchor;
+import com.n4y.client.gui.hud.HudPlacement;
 import com.n4y.client.module.Module;
 
 class ProfileTest {
@@ -31,12 +34,22 @@ class ProfileTest {
 
 	@Test
 	void codecRoundTrip() {
-		Profile profile = new Profile("PvP", "pink", Map.of("zoom", new ModuleState(true, 86)));
+		Profile profile = new Profile("PvP", "pink", Map.of("zoom", new ModuleState(true, 86, Optional.empty())));
 		var json = Profile.CODEC.encodeStart(JsonOps.INSTANCE, profile).getOrThrow();
 		Profile back = Profile.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(profile, back);
 		assertEquals(86, back.state("zoom").key());
 		assertEquals(Module.UNBOUND, back.state("missing").key());
 		assertFalse(back.state("missing").enabled());
+	}
+
+	@Test
+	void hudPlacementSurvivesTheRoundTrip() {
+		HudPlacement placement = HudPlacement.of(HudAnchor.BOTTOM_RIGHT, -8f, -12f);
+		Profile profile = new Profile("Creator", "green",
+				Map.of("coordinates", new ModuleState(true, Module.UNBOUND, Optional.of(placement))));
+		var json = Profile.CODEC.encodeStart(JsonOps.INSTANCE, profile).getOrThrow();
+		Profile back = Profile.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(Optional.of(placement), back.state("coordinates").hud());
 	}
 }

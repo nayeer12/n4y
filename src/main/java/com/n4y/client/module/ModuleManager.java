@@ -9,32 +9,73 @@ import com.n4y.client.core.Strings;
 import com.n4y.client.core.event.EventBus;
 import com.n4y.client.core.event.events.ClientShutdownEvent;
 import com.n4y.client.core.event.events.ClientTickEvent;
+import java.util.function.Consumer;
+
 import com.n4y.client.module.impl.AutoJumpModule;
 import com.n4y.client.module.impl.AutoSprintModule;
 import com.n4y.client.module.impl.CinematicCameraModule;
+import com.n4y.client.module.impl.CinematicModeModule;
+import com.n4y.client.module.impl.CleanScreenshotModule;
+import com.n4y.client.module.impl.ClearWeatherModule;
+import com.n4y.client.module.impl.CoordinatesModule;
+import com.n4y.client.module.impl.DayLockModule;
+import com.n4y.client.module.impl.FullbrightModule;
+import com.n4y.client.module.impl.HideHandModule;
+import com.n4y.client.module.impl.HitMarkerModule;
+import com.n4y.client.module.impl.NoFireOverlayModule;
+import com.n4y.client.module.impl.NoHurtCamModule;
+import com.n4y.client.module.impl.PerformanceModule;
+import com.n4y.client.module.impl.SessionStatsModule;
 import com.n4y.client.module.impl.HideHudModule;
 import com.n4y.client.module.impl.NoViewBobbingModule;
 import com.n4y.client.module.impl.ToggleSneakModule;
 import com.n4y.client.module.impl.ZoomModule;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 /** Registry and driver of every {@link Module}. */
 public final class ModuleManager {
 	private final List<Module> modules = new ArrayList<>();
 	private Runnable changeListener = () -> { };
+	private Consumer<Module> stateListener = module -> { };
 	/** Suppresses change notifications while a stored configuration is being applied. */
 	private boolean applying;
 
-	/** Registers the built-in modules. Order here is the order shown in the interface. */
-	public void registerDefaults() {
+	/**
+	 * Registers the built-in modules. Order here is the order shown in the interface.
+	 *
+	 * @param onScreenshot where the Clean Screenshot module reports the saved file
+	 */
+	public void registerDefaults(Consumer<Component> onScreenshot) {
+		// Movement
 		register(new AutoSprintModule());
 		register(new AutoJumpModule());
+		// Player
 		register(new ToggleSneakModule());
+		register(new NoHurtCamModule());
+		// Visual
 		register(new ZoomModule());
+		register(new FullbrightModule());
 		register(new NoViewBobbingModule());
 		register(new CinematicCameraModule());
+		register(new NoFireOverlayModule());
 		register(new HideHudModule());
+		// World
+		register(new DayLockModule());
+		register(new ClearWeatherModule());
+		// Creator
+		register(new CinematicModeModule(this));
+		register(new CleanScreenshotModule(onScreenshot));
+		register(new HideHandModule());
+		// Combat
+		HitMarkerModule hitMarker = new HitMarkerModule();
+		hitMarker.listen();
+		register(hitMarker);
+		// On screen
+		register(new CoordinatesModule());
+		register(new PerformanceModule());
+		register(new SessionStatsModule());
 	}
 
 	public void register(Module module) {
@@ -42,6 +83,7 @@ public final class ModuleManager {
 			throw new IllegalArgumentException("Duplicate module id: " + module.id());
 		}
 		module.setChangeListener(this::onModuleChanged);
+		module.setStateListener(this::onModuleToggled);
 		modules.add(module);
 	}
 
@@ -53,6 +95,17 @@ public final class ModuleManager {
 	private void onModuleChanged() {
 		if (!applying) {
 			changeListener.run();
+		}
+	}
+
+	/** Called when a module is switched on or off by the player, not while loading a profile. */
+	public void onToggle(Consumer<Module> listener) {
+		this.stateListener = listener;
+	}
+
+	private void onModuleToggled(Module module) {
+		if (!applying) {
+			stateListener.accept(module);
 		}
 	}
 
@@ -85,7 +138,7 @@ public final class ModuleManager {
 		}
 	}
 
-	/** Turns everything off and writes the restored vanilla options to disk. */
+	/** Turns everything off, clears the render flags and writes the restored options to disk. */
 	public void disableAll(Minecraft mc) {
 		boolean[] any = {false};
 		applySilently(() -> {
@@ -96,6 +149,7 @@ public final class ModuleManager {
 				}
 			}
 		});
+		ModuleFlags.reset();
 		if (any[0] && mc.options != null) {
 			mc.options.save();
 		}

@@ -9,6 +9,9 @@ import com.n4y.client.core.io.N4yPaths;
 import com.n4y.client.core.keybind.KeybindManager;
 import com.n4y.client.core.keybind.N4yKeybinds;
 import com.n4y.client.gui.screen.N4yMainScreen;
+import com.n4y.client.gui.hud.HudManager;
+import com.n4y.client.gui.hud.NotificationCenter;
+import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.theme.ThemeEngine;
 import com.n4y.client.module.ModuleManager;
 
@@ -16,6 +19,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
 
 /**
  * Fabric client entrypoint. Builds the managers, wires Fabric's callbacks to the n4y
@@ -27,6 +31,8 @@ public final class N4yClient implements ClientModInitializer {
 	private final EventBus eventBus = new EventBus();
 	private final ThemeEngine themeEngine = new ThemeEngine();
 	private final ModuleManager moduleManager = new ModuleManager();
+	private final HudManager hudManager = new HudManager(moduleManager, themeEngine);
+	private final long startedAt = System.currentTimeMillis();
 	private ConfigManager configManager;
 	private KeybindManager keybindManager;
 
@@ -54,6 +60,19 @@ public final class N4yClient implements ClientModInitializer {
 		return keybindManager;
 	}
 
+	public HudManager hud() {
+		return hudManager;
+	}
+
+	public NotificationCenter notifications() {
+		return hudManager.notifications();
+	}
+
+	/** How long this play session has been running, used by the on-screen statistics. */
+	public long sessionSeconds() {
+		return (System.currentTimeMillis() - startedAt) / 1000L;
+	}
+
 	@Override
 	public void onInitializeClient() {
 		instance = this;
@@ -62,11 +81,15 @@ public final class N4yClient implements ClientModInitializer {
 		N4yPaths.ensureCreated();
 		N4yKeybinds.register();
 		N4yKeybinds.onOpenGui(mc -> mc.setScreen(new N4yMainScreen()));
-		moduleManager.registerDefaults();
+		moduleManager.registerDefaults(message -> hudManager.notifications()
+				.push(Icons.CAMERA, Component.translatable("n4y.notify.screenshot"), message, true));
 		moduleManager.attach(eventBus);
+		hudManager.register();
 
 		configManager = new ConfigManager(N4yPaths.root(), themeEngine, moduleManager);
 		moduleManager.onChange(configManager::markDirty);
+		moduleManager.onToggle(module -> hudManager.notifications().push(module.icon(), module.displayName(),
+				Component.translatable(module.isEnabled() ? "n4y.notify.on" : "n4y.notify.off"), module.isEnabled()));
 		themeEngine.onChange(configManager::markDirty);
 		// Reading the files is safe this early; applying them to the game is not, so that
 		// waits until Minecraft has finished starting.

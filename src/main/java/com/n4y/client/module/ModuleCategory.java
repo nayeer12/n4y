@@ -13,6 +13,7 @@ public enum ModuleCategory {
 	VISUAL("visual", Icons.EYE),
 	PLAYER("player", Icons.PERSON),
 	WORLD("world", Icons.CUBE),
+	CREATOR("creator", Icons.FILM),
 	MISC("misc", Icons.DOTS);
 
 	private final String id;

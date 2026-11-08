@@ -30,6 +30,11 @@ public final class ModuleCardWidget extends N4yWidget {
 	private final ToggleSwitch toggle = new ToggleSwitch();
 	private final Animation glow = new Animation(0f, 240, Easing.OUT_CUBIC);
 	private boolean shownState;
+	private String cachedName = "";
+	private String cachedDesc = "";
+	private String trimmedName = "";
+	private String trimmedDesc = "";
+	private float trimmedWidth = -1f;
 
 	public ModuleCardWidget(Module module, BooleanSupplier binding) {
 		this.module = module;
@@ -100,14 +105,21 @@ public final class ModuleCardWidget extends N4yWidget {
 		float textX = x + 11 + ICON + 9;
 		float textW = width - (textX - x) - 12f - TOGGLE_W - 7f - (showChip ? chipWidth() + 6f : 0f);
 
-		String name = N4yText.ellipsize(module.displayName().getString(), true, 1f, textW);
-		N4yText.draw(ctx.g(), name, textX, y + 11.5f, 1f, Colors.fade(t.textPrimary(), a), true);
-
+		String name = module.displayName().getString();
 		String desc = isBinding
 				? Component.translatable("n4y.keybind.press").getString()
 				: module.description().getString();
+		// Trimming measures the text glyph by glyph, so only redo it when something changed.
+		if (textW != trimmedWidth || !name.equals(cachedName) || !desc.equals(cachedDesc)) {
+			cachedName = name;
+			cachedDesc = desc;
+			trimmedWidth = textW;
+			trimmedName = N4yText.ellipsize(name, true, 1f, textW);
+			trimmedDesc = N4yText.ellipsize(desc, false, 0.78f, textW);
+		}
+		N4yText.draw(ctx.g(), trimmedName, textX, y + 11.5f, 1f, Colors.fade(t.textPrimary(), a), true);
 		int descColor = Colors.fade(isBinding ? t.accent() : t.textSecondary(), a);
-		N4yText.draw(ctx.g(), N4yText.ellipsize(desc, false, 0.78f, textW), textX, y + 25f, 0.78f, descColor, false);
+		N4yText.draw(ctx.g(), trimmedDesc, textX, y + 25f, 0.78f, descColor, false);
 
 		if (showChip) {
 			drawChip(ctx, isBinding, hovered, a, t);

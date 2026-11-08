@@ -25,6 +25,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.n4y.client.N4y;
+import com.n4y.client.gui.hud.HudModule;
 import com.n4y.client.gui.theme.Theme;
 import com.n4y.client.gui.theme.ThemeEngine;
 import com.n4y.client.gui.theme.Themes;
@@ -87,6 +88,9 @@ public final class ConfigManager {
 			for (Module module : modules.all()) {
 				ModuleState state = profile.state(module.id());
 				module.setKey(state.key());
+				if (module instanceof HudModule hud) {
+					state.hud().ifPresentOrElse(hud::setPlacement, hud::resetPlacement);
+				}
 				module.setEnabled(state.enabled());
 			}
 		});

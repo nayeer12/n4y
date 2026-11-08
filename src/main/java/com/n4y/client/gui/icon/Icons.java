@@ -104,6 +104,78 @@ public final class Icons {
 			.line(17.5f, 12, 17.5f, 15.5f)
 			.build();
 
+	public static final Icon SUN = Icon.of("sun")
+			.ring(12, 12, 4.6f)
+			.line(12, 2.5f, 12, 5.5f).line(12, 18.5f, 12, 21.5f)
+			.line(2.5f, 12, 5.5f, 12).line(18.5f, 12, 21.5f, 12)
+			.line(5.3f, 5.3f, 7.4f, 7.4f).line(16.6f, 16.6f, 18.7f, 18.7f)
+			.line(18.7f, 5.3f, 16.6f, 7.4f).line(7.4f, 16.6f, 5.3f, 18.7f)
+			.build();
+
+	public static final Icon HEART = Icon.of("heart")
+			.curve(12, 20, 5.5f, 14.8f, 3.6f, 10.4f)
+			.curve(3.6f, 10.4f, 2.6f, 6.2f, 7.4f, 5.6f)
+			.curve(7.4f, 5.6f, 10.4f, 5.2f, 12, 8.4f)
+			.curve(12, 8.4f, 13.6f, 5.2f, 16.6f, 5.6f)
+			.curve(16.6f, 5.6f, 21.4f, 6.2f, 20.4f, 10.4f)
+			.curve(20.4f, 10.4f, 18.5f, 14.8f, 12, 20)
+			.build();
+
+	public static final Icon HAND = Icon.of("hand")
+			.shape(8, 20.5f, 17.5f, 20.5f, 17.5f, 11.5f, 8, 11.5f)
+			.line(10.4f, 11.5f, 10.4f, 7f)
+			.line(12.75f, 11.5f, 12.75f, 5.5f)
+			.line(15.1f, 11.5f, 15.1f, 7f)
+			.build();
+
+	public static final Icon FLAME = Icon.of("flame")
+			.curve(12, 21, 4.5f, 16.5f, 10, 10.5f)
+			.curve(10, 10.5f, 11, 13, 12.5f, 13.2f)
+			.curve(12.5f, 13.2f, 13.5f, 9, 12, 3)
+			.curve(12, 3, 19.5f, 9, 18, 15)
+			.curve(18, 15, 17, 19.5f, 12, 21)
+			.build();
+
+	public static final Icon CLOCK = Icon.of("clock")
+			.ring(12, 12, 8f)
+			.line(12, 6.5f, 12, 12, 15.8f, 13.8f)
+			.build();
+
+	public static final Icon CLOUD = Icon.of("cloud")
+			.curve(7, 17.5f, 2.5f, 17.5f, 3.6f, 13.2f)
+			.curve(3.6f, 13.2f, 4.6f, 10.6f, 7.6f, 10.9f)
+			.curve(7.6f, 10.9f, 8.4f, 6, 13.4f, 6.5f)
+			.curve(13.4f, 6.5f, 17, 7, 17.2f, 10.9f)
+			.curve(17.2f, 10.9f, 21.4f, 11.1f, 20.9f, 14.5f)
+			.curve(20.9f, 14.5f, 20.4f, 17.5f, 17, 17.5f)
+			.line(7, 17.5f, 17, 17.5f)
+			.build();
+
+	public static final Icon CROSSHAIR = Icon.of("crosshair")
+			.ring(12, 12, 7f)
+			.line(12, 2.5f, 12, 6f).line(12, 18f, 12, 21.5f)
+			.line(2.5f, 12, 6f, 12).line(18f, 12, 21.5f, 12)
+			.dot(12, 12, 1.4f)
+			.build();
+
+	public static final Icon CHART = Icon.of("chart")
+			.line(4, 4.5f, 4, 20, 20.5f, 20)
+			.line(6.5f, 15.5f, 10.5f, 10.5f, 14, 13.5f, 19.5f, 6.5f)
+			.build();
+
+	public static final Icon PIN = Icon.of("pin")
+			.ring(12, 9.4f, 3.4f)
+			.line(9.4f, 11.9f, 12, 20.5f)
+			.line(14.6f, 11.9f, 12, 20.5f)
+			.build();
+
+	public static final Icon FILM = Icon.of("film")
+			.shape(3.5f, 5.5f, 20.5f, 5.5f, 20.5f, 18.5f, 3.5f, 18.5f)
+			.line(8, 5.5f, 8, 18.5f)
+			.line(16, 5.5f, 16, 18.5f)
+			.line(3.5f, 12, 20.5f, 12)
+			.build();
+
 	private Icons() {
 	}
 }

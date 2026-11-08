@@ -13,6 +13,7 @@ import com.n4y.client.N4yClient;
 import com.n4y.client.config.ConfigManager;
 import com.n4y.client.gui.anim.Animation;
 import com.n4y.client.gui.anim.Easing;
+import com.n4y.client.gui.hud.HudModule;
 import com.n4y.client.gui.icon.IconTextures;
 import com.n4y.client.gui.icon.Icons;
 import com.n4y.client.gui.render.Colors;
@@ -50,7 +51,7 @@ import net.minecraft.network.chat.Component;
 public final class N4yMainScreen extends Screen {
 	/** The sections of the interface, selected by the header tabs. */
 	public enum Tab {
-		MODULES, PROFILES, APPEARANCE
+		MODULES, HUD, PROFILES, APPEARANCE
 	}
 
 	private static final float PANEL_W = 480f;
@@ -81,6 +82,7 @@ public final class N4yMainScreen extends Screen {
 	private TextFieldWidget search;
 	private TextFieldWidget profileName;
 	private ButtonWidget createProfile;
+	private ButtonWidget openStudio;
 
 	private Tab tab = lastTab;
 	private ModuleCategory category = lastCategory;
@@ -92,6 +94,9 @@ public final class N4yMainScreen extends Screen {
 	/** Uniform zoom that keeps the whole panel on screen, and the open-animation lift. */
 	private float ui = 1f;
 	private float lift;
+	private List<Module> visibleCache;
+	private String visibleQuery = "";
+	private ModuleCategory visibleCategory;
 
 	public N4yMainScreen() {
 		super(Component.literal(N4y.NAME));
@@ -122,6 +127,7 @@ public final class N4yMainScreen extends Screen {
 			sidebar.add(new SidebarItemWidget(c, () -> category == c));
 		}
 		tabs.add(new TabButtonWidget(Icons.GRID, Component.translatable("n4y.tab.modules"), () -> tab == Tab.MODULES));
+		tabs.add(new TabButtonWidget(Icons.LAYOUT, Component.translatable("n4y.tab.hud"), () -> tab == Tab.HUD));
 		tabs.add(new TabButtonWidget(Icons.FOLDER, Component.translatable("n4y.tab.profiles"), () -> tab == Tab.PROFILES));
 		tabs.add(new TabButtonWidget(Icons.PALETTE, Component.translatable("n4y.tab.appearance"), () -> tab == Tab.APPEARANCE));
 		for (Theme t : Themes.ALL) {
@@ -129,6 +135,9 @@ public final class N4yMainScreen extends Screen {
 		}
 		if (search == null) {
 			search = TextFieldWidget.search(Component.translatable("n4y.search"));
+		}
+		if (openStudio == null) {
+			openStudio = new ButtonWidget(Component.translatable("n4y.hud.studio.open"), true, () -> true);
 		}
 		if (profileName == null) {
 			profileName = new TextFieldWidget(null, Component.translatable("n4y.profiles.name"), 24);
@@ -232,8 +241,15 @@ public final class N4yMainScreen extends Screen {
 		return (float) (mouseY / ui) - lift;
 	}
 
+	/** Filtering allocates and compares strings, so it runs once per frame, not once per use. */
 	private List<Module> visibleModules() {
-		return modules().filter(category, search == null ? "" : search.text());
+		String query = search == null ? "" : search.text();
+		if (visibleCache == null || !query.equals(visibleQuery) || category != visibleCategory) {
+			visibleQuery = query;
+			visibleCategory = category;
+			visibleCache = modules().filter(category, query);
+		}
+		return visibleCache;
 	}
 
 	private float bodyY() {
@@ -267,8 +283,8 @@ public final class N4yMainScreen extends Screen {
 		}
 		search.bounds(panelX + PANEL_W - PAD - 118f, panelY + 13f, 118f, FIELD_H);
 
-		float itemH = 23f;
 		float itemGap = 2.5f;
+		float itemH = Math.min(23f, (bodyH() - 16f - itemGap * (sidebar.size() - 1)) / sidebar.size());
 		float iy = bodyY() + 8f;
 		for (SidebarItemWidget item : sidebar) {
 			item.bounds(panelX + PAD + 6f, iy, SIDEBAR_W - 12f, itemH);
@@ -287,6 +303,22 @@ public final class N4yMainScreen extends Screen {
 					ModuleCardWidget card = cards.get(visible.get(i));
 					card.bounds(contentX() + (i % 2) * (cardW + GAP), bodyY() + (i / 2) * (CARD_H + GAP) - offset, cardW, CARD_H);
 				}
+			}
+			case HUD -> {
+				List<HudModule> elements = N4yClient.get().hud().elements();
+				float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
+				float cardW = (listW - GAP) / 2f;
+				int rows = (elements.size() + 1) / 2;
+				float listH = bodyH() - FIELD_H - 10f;
+				maxScroll = Math.max(0f, rows * CARD_H + Math.max(0, rows - 1) * GAP - listH);
+				scrollTarget = Math.max(0f, Math.min(scrollTarget, maxScroll));
+				for (int i = 0; i < elements.size(); i++) {
+					ModuleCardWidget card = cards.get(elements.get(i));
+					if (card != null) {
+						card.bounds(panelX + PAD + (i % 2) * (cardW + GAP), bodyY() + (i / 2) * (CARD_H + GAP) - offset, cardW, CARD_H);
+					}
+				}
+				openStudio.bounds(panelX + PANEL_W - PAD - 116f, bodyY() + bodyH() - FIELD_H, 116f, FIELD_H);
 			}
 			case PROFILES -> {
 				float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
@@ -355,6 +387,7 @@ public final class N4yMainScreen extends Screen {
 				renderSidebar(ctx);
 				renderModules(ctx, virtualY(mouseY));
 			}
+			case HUD -> renderHud(ctx, virtualY(mouseY));
 			case PROFILES -> renderProfiles(ctx, virtualY(mouseY));
 			case APPEARANCE -> renderAppearance(ctx);
 			default -> {
@@ -372,6 +405,7 @@ public final class N4yMainScreen extends Screen {
 				drawTooltip(g, t, a, button.tooltip().getString(), mouseX, mouseY);
 			}
 		}
+		N4yClient.get().notifications().render(g, t, width, now);
 	}
 
 	/** Glass tooltip in the n4y typography, instead of the vanilla pixel box. */
@@ -442,6 +476,28 @@ public final class N4yMainScreen extends Screen {
 		}
 		ctx.g().disableScissor();
 		renderScrollHints(ctx, cx, bodyY(), cw, bodyH());
+	}
+
+	private void renderHud(UiContext ctx, float mouseY) {
+		List<HudModule> elements = N4yClient.get().hud().elements();
+		float listX = panelX + PAD;
+		float listW = PANEL_W - PAD * 2 - SCROLLBAR_W;
+		float listH = bodyH() - FIELD_H - 10f;
+
+		UiContext inner = new UiContext(ctx.g(), ctx.theme(), ctx.now(), ctx.alpha(), ctx.mouseX(), mouseY);
+		ctx.g().enableScissor(Math.round(listX), Math.round(bodyY()), Math.round(listX + listW), Math.round(bodyY() + listH));
+		for (HudModule element : elements) {
+			ModuleCardWidget card = cards.get(element);
+			if (card != null && card.y() + card.height() >= bodyY() - 2 && card.y() <= bodyY() + listH + 2) {
+				card.render(inner);
+			}
+		}
+		ctx.g().disableScissor();
+		renderScrollHints(ctx, listX, bodyY(), listW, listH);
+
+		N4yText.drawMiddle(ctx.g(), Component.translatable("n4y.hud.hint").getString(),
+				listX, bodyY() + bodyH() - FIELD_H / 2f, 0.78f, Colors.fade(ctx.theme().textMuted(), ctx.alpha()), false);
+		openStudio.render(ctx);
 	}
 
 	private void renderProfiles(UiContext ctx, float mouseY) {
@@ -520,6 +576,7 @@ public final class N4yMainScreen extends Screen {
 
 		return switch (tab) {
 			case MODULES -> clickModules(mx, my, right);
+			case HUD -> clickHud(mx, my, right);
 			case PROFILES -> clickProfiles(mx, my);
 			case APPEARANCE -> clickAppearance(mx, my);
 		};
@@ -557,6 +614,29 @@ public final class N4yMainScreen extends Screen {
 		return false;
 	}
 
+	private boolean clickHud(float mx, float my, boolean right) {
+		if (openStudio.contains(mx, my)) {
+			minecraft.setScreen(new HudStudioScreen(this));
+			return true;
+		}
+		float listH = bodyH() - FIELD_H - 10f;
+		if (my >= bodyY() && my <= bodyY() + listH) {
+			for (HudModule element : N4yClient.get().hud().elements()) {
+				ModuleCardWidget card = cards.get(element);
+				if (card == null || !card.contains(mx, my)) {
+					continue;
+				}
+				if (right || card.chipContains(mx, my)) {
+					bindingModule = element;
+				} else {
+					card.toggle(System.nanoTime());
+				}
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private boolean clickProfiles(float mx, float my) {
 		if (profileName.contains(mx, my)) {
 			profileName.setFocused(true);
@@ -584,6 +664,8 @@ public final class N4yMainScreen extends Screen {
 				} else if (!row.isActive() && config().switchProfile(row.profileName())) {
 					refreshProfiles();
 					syncCards();
+					N4yClient.get().notifications().push(Icons.FOLDER,
+							Component.translatable("n4y.notify.profile"), Component.literal(row.profileName()), true);
 				}
 				return true;
 			}
@@ -639,6 +721,11 @@ public final class N4yMainScreen extends Screen {
 
 	@Override
 	public boolean charTyped(CharacterEvent event) {
+		// Quick search: typing anywhere in the module list starts filtering.
+		if (tab == Tab.MODULES && focusedField() == null && bindingModule == null
+				&& !Character.isISOControl(event.codepoint())) {
+			search.setFocused(true);
+		}
 		TextFieldWidget field = focusedField();
 		if (field != null && field.append(event.codepoint())) {
 			if (field == search) {

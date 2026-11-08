@@ -24,10 +24,10 @@ Instalar: copia `build/libs/n4y-client-1.0.0.jar` y Fabric API `0.141.6+1.21.11`
 | 3 | Interfaz principal: cabecera, pestañas, buscador, categorías, cuadrícula con scroll | ✅ |
 | 4 | Sistema de módulos: `Module`, `ModuleManager`, keybinds por módulo | ✅ |
 | 5 | Configuración y perfiles: guardado en disco, perfiles, Keybind Manager | ✅ |
-| 6 | Módulos individuales | — |
-| 7 | Herramientas premium | — |
-| 8 | Creator Edition | — |
-| 9 | Optimización y pruebas | — |
+| 6 | Módulos individuales: mixins, mundo, visuales, combate | ✅ |
+| 7 | Herramientas premium: HUD Studio, monitor, estadísticas, notificaciones, búsqueda rápida | ✅ |
+| 8 | Creator Edition: modo cine, captura limpia, ocultar manos, mediodía fijo | ✅ |
+| 9 | Optimización y pruebas: menos llamadas de dibujo, cachés, 41 tests + prueba en el juego | ✅ |
 
 ## Estructura
 
@@ -40,6 +40,7 @@ src/main/java/com/n4y/client/
     ├── keybind/          keybinds globales (categoría "n4y Client")
     └── io/               rutas en .minecraft/config/n4y/
 gui/
+├── hud/                  HudManager, HudModule, anclajes, notificaciones
 ├── icon/                 iconos de línea vectoriales rasterizados al vuelo
 ├── widget/               tarjetas, interruptores, pestañas, buscador, barra lateral
 ├── anim/                 Animation + Easing (basadas en tiempo, independientes de FPS)
@@ -49,6 +50,7 @@ gui/
 module/                   Module, ModuleCategory, ModuleManager + módulos en impl/
 config/                   ConfigManager, Profile, ClientPrefs, ModuleState
 core/keybind/             KeybindManager (teclas propias, sin mixins)
+mixin/                    4 mixins: brillo, sacudida, manos y llamas
 src/gametest/             pruebas dentro del juego (Fabric Client GameTest)
 ```
 
@@ -58,12 +60,17 @@ src/gametest/             pruebas dentro del juego (Fabric Client GameTest)
 xvfb-run ./gradlew runClientGameTest   # o sin xvfb en un escritorio
 ```
 
-Crea un mundo Singleplayer, abre la interfaz y guarda capturas en `build/run/clientGameTest/screenshots/`.
+Crea un mundo Singleplayer y recorre el cliente entero con ratón y teclado reales: pestañas,
+categorías, buscador, interruptores, teclas, perfiles, HUD Studio y temas, comprobando que los
+módulos cambian el juego de verdad y lo dejan como estaba. Las capturas quedan en
+`build/run/clientGameTest/screenshots/`.
 
-![Interfaz de n4y](docs/screenshots/fase3-interfaz.png)
+![n4y Client](docs/screenshots/fase6-9-cliente-completo.png)
 
 <details>
-<summary>Motor Glass en los 4 temas (Fase 2)</summary>
+<summary>Más capturas</summary>
+
+![Interfaz de n4y](docs/screenshots/fase3-interfaz.png)
 
 ![Motor Glass en los 4 temas](docs/screenshots/fase2-motor-glass.png)
 
@@ -90,18 +97,46 @@ en el perfil, no en las opciones de Minecraft, así que viajan contigo al cambia
 
 ![Perfiles y teclas](docs/screenshots/fase5-perfiles-keybinds.png)
 
-## Módulos incluidos
+## Módulos
 
-Todos usan API pública de Minecraft, sin mixins, y restauran tus ajustes al desactivarse.
+18 módulos repartidos por categorías. Todos guardan tus ajustes y los devuelven al apagarse.
 
 | Módulo | Categoría | Qué hace |
 |---|---|---|
 | AutoSprint | Movimiento | Corre solo al avanzar |
 | AutoJump | Movimiento | Activa el salto automático de vanilla |
 | Agacharse fijo | Jugador | Agacharse pasa a ser un interruptor |
+| Sin sacudida | Jugador | La cámara no tiembla al recibir daño |
 | Zoom | Visual | Baja el FOV a 30° |
-| Sin balanceo | Visual | Quita el balanceo de cámara al andar |
-| Cámara cine | Visual | Cámara suave de vanilla para grabar |
+| Luz total | Visual | Ve en cuevas sin antorchas |
+| Sin balanceo | Visual | Quita el balanceo al andar |
+| Cámara cine | Visual | Cámara suave de vanilla |
+| Sin llamas | Visual | El fuego no te tapa la pantalla |
 | Ocultar HUD | Visual | Oculta la interfaz del juego |
+| Mediodía fijo | Mundo | Para el tiempo al mediodía (singleplayer) |
+| Cielo despejado | Mundo | Quita la lluvia y la detiene (singleplayer) |
+| Modo cine | Creador | Un interruptor que deja todo listo para grabar |
+| Captura limpia | Creador | Foto sin HUD ni manos, y vuelve solo |
+| Ocultar manos | Creador | Quita las manos de la vista |
+| Marcador de golpe | Combate | Señal en la mira al acertar |
+| Coordenadas | Varios | Tu posición y hacia dónde miras |
+| Rendimiento | Varios | FPS y memoria en uso |
+| Estadísticas | Varios | Tiempo de sesión y perfil activo |
 
-Combate, Mundo y Varios están vacías a propósito: sus módulos llegan en la Fase 6.
+Los que no se pueden hacer con API pública usan mixins mínimos: solo el brillo (Luz total),
+la sacudida de cámara, el dibujado de las manos y las llamas en pantalla.
+
+## HUD y herramientas de creador
+
+Los elementos en pantalla (coordenadas, rendimiento, estadísticas, marcador) se colocan desde
+el **HUD Studio**: arrastras cada uno donde quieras, se ancla a la esquina más cercana y la
+posición se guarda en el perfil. Así se mantiene igual aunque cambies de resolución. La tecla
+R los devuelve a su sitio y Esc guarda.
+
+Las **notificaciones** avisan en una esquina de lo que activas y del perfil que cargas, con el
+mismo estilo Glass. La **búsqueda rápida** es escribir directamente en la pestaña de módulos,
+sin pulsar el buscador.
+
+Para grabar: **Modo cine** enciende de golpe Ocultar HUD, Ocultar manos, Sin balanceo y
+Cámara cine, y al apagarlo deja cada uno como estaba. **Captura limpia**, con una tecla
+asignada, hace la foto sin interfaz ni manos y lo restaura todo solo.

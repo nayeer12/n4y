@@ -8,6 +8,9 @@ import java.util.List;
 import org.lwjgl.glfw.GLFW;
 
 import com.n4y.client.N4yClient;
+import com.n4y.client.gui.hud.HudModule;
+import com.n4y.client.gui.icon.Icons;
+import com.n4y.client.gui.screen.HudStudioScreen;
 import com.n4y.client.gui.screen.N4yMainScreen;
 import com.n4y.client.gui.theme.Theme;
 import com.n4y.client.gui.theme.Themes;
@@ -15,9 +18,11 @@ import com.n4y.client.gui.widget.N4yWidget;
 import com.n4y.client.gui.widget.ProfileRowWidget;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleCategory;
+import com.n4y.client.module.ModuleFlags;
 
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.network.chat.Component;
 import net.fabricmc.fabric.api.client.gametest.v1.TestInput;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -45,6 +50,7 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 			testSearch(context);
 			testToggleAndScroll(context);
 			testKeybinding(context);
+			testHudAndCreatorTools(context);
 			testProfiles(context);
 			testAppearance(context);
 			testStoredOnDisk(context);
@@ -138,11 +144,122 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("n4y-07-key-bound");
 	}
 
+	/** The on-screen elements, the HUD Studio and the creator tools. */
+	private void testHudAndCreatorTools(ClientGameTestContext context) {
+		// Start from a clean slate so the restore checks below mean something.
+		context.runOnClient(mc -> N4yClient.get().modules().disableAll(mc));
+		context.waitTicks(4);
+
+		// Mixin-backed modules really change what is drawn.
+		context.runOnClient(mc -> {
+			N4yClient.get().modules().byId("fullbright").orElseThrow().setEnabled(true);
+			N4yClient.get().modules().byId("no_hurt_cam").orElseThrow().setEnabled(true);
+		});
+		context.waitTicks(4);
+		context.runOnClient(mc -> {
+			if (mc.options.gamma().get() < 5.0) {
+				throw new AssertionError("Fullbright did not raise the brightness, gamma is " + mc.options.gamma().get());
+			}
+			if (!ModuleFlags.noHurtCam) {
+				throw new AssertionError("No Hurt Cam did not set its render flag");
+			}
+		});
+
+		// Cinematic mode drives the other modules and gives them back.
+		context.runOnClient(mc -> N4yClient.get().modules().byId("cinematic_mode").orElseThrow().setEnabled(true));
+		context.waitTicks(6);
+		context.runOnClient(mc -> {
+			for (String id : List.of("hide_hud", "hide_hand", "no_view_bobbing", "cinematic_camera")) {
+				if (!N4yClient.get().modules().byId(id).orElseThrow().isEnabled()) {
+					throw new AssertionError("Cinematic mode did not turn on " + id);
+				}
+			}
+			if (!ModuleFlags.hideHand) {
+				throw new AssertionError("Cinematic mode did not hide the hands");
+			}
+		});
+		context.runOnClient(mc -> N4yClient.get().modules().byId("cinematic_mode").orElseThrow().setEnabled(false));
+		context.waitTicks(6);
+		context.runOnClient(mc -> {
+			if (ModuleFlags.hideHand || mc.options.hideGui) {
+				throw new AssertionError("Cinematic mode did not restore the view");
+			}
+		});
+
+		// On-screen elements, drawn over the world.
+		context.runOnClient(mc -> {
+			for (String id : List.of("coordinates", "performance", "session_stats")) {
+				N4yClient.get().modules().byId(id).orElseThrow().setEnabled(true);
+			}
+			N4yClient.get().notifications().push(Icons.CUBE,
+					Component.literal("n4y"), Component.literal("HUD"), true);
+			mc.setScreen(null);
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("n4y-10-hud");
+
+		// The HUD Studio moves an element and the placement is remembered.
+		context.runOnClient(mc -> mc.setScreen(new HudStudioScreen(null)));
+		context.waitTicks(10);
+		context.takeScreenshot("n4y-11-hud-studio");
+		HudModule coordinates = context.computeOnClient(mc -> (HudModule) N4yClient.get().modules().byId("coordinates").orElseThrow());
+		dragElement(context, coordinates, 0.5f, 0.75f);
+		context.runOnClient(mc -> {
+			if (!coordinates.isMoved()) {
+				throw new AssertionError("Dragging the element did not change its placement");
+			}
+			mc.setScreen(null);
+		});
+		context.waitTicks(6);
+		context.takeScreenshot("n4y-12-hud-moved");
+
+		context.runOnClient(mc -> {
+			N4yClient.get().config().markDirty();
+			N4yClient.get().config().flush();
+			((HudModule) N4yClient.get().modules().byId("coordinates").orElseThrow()).resetPlacement();
+			N4yClient.get().config().loadFromDisk();
+			N4yClient.get().config().applyToGame();
+			if (!coordinates.isMoved()) {
+				throw new AssertionError("The saved HUD placement was not restored from disk");
+			}
+			for (String id : List.of("fullbright", "no_hurt_cam", "coordinates", "performance", "session_stats")) {
+				N4yClient.get().modules().byId(id).orElseThrow().setEnabled(false);
+			}
+			((HudModule) N4yClient.get().modules().byId("coordinates").orElseThrow()).resetPlacement();
+			mc.setScreen(new N4yMainScreen());
+		});
+		context.waitTicks(10);
+	}
+
+	/** Drags an on-screen element to a fraction of the window and drops it there. */
+	private void dragElement(ClientGameTestContext context, HudModule element, float fx, float fy) {
+		double[] from = context.computeOnClient(mc -> {
+			float w = element.width(mc);
+			float h = element.height(mc);
+			int gw = mc.getWindow().getGuiScaledWidth();
+			int gh = mc.getWindow().getGuiScaledHeight();
+			double scale = mc.getWindow().getGuiScale();
+			return new double[] {
+					(element.placement().screenX(gw, w) + w / 2f) * scale,
+					(element.placement().screenY(gh, h) + h / 2f) * scale,
+					gw * fx * scale, gh * fy * scale};
+		});
+		TestInput input = context.getInput();
+		input.setCursorPos(from[0], from[1]);
+		context.waitTick();
+		input.holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTick();
+		input.setCursorPos(from[2], from[3]);
+		context.waitTicks(2);
+		input.releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(4);
+	}
+
 	/** Creating, switching and deleting profiles through the interface. */
 	private void testProfiles(ClientGameTestContext context) {
-		click(context, screen(context).tabButtons().get(1));
+		click(context, screen(context).tabButtons().get(2));
 		context.waitTicks(8);
-		check(context, s -> s.tab() == N4yMainScreen.Tab.PROFILES, "clicking the second tab did not open Profiles");
+		check(context, s -> s.tab() == N4yMainScreen.Tab.PROFILES, "clicking the Profiles tab did not open it");
 		context.takeScreenshot("n4y-08-profiles");
 
 		click(context, screen(context).profileNameBox());
@@ -218,7 +335,7 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 	}
 
 	private void switchToProfile(ClientGameTestContext context, String name) {
-		click(context, screen(context).tabButtons().get(1));
+		click(context, screen(context).tabButtons().get(2));
 		context.waitTicks(4);
 		ProfileRowWidget row = context.computeOnClient(mc -> screen(mc).profileRowWidgets().stream()
 				.filter(r -> r.profileName().equals(name)).findFirst()
@@ -240,9 +357,9 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 	}
 
 	private void testAppearance(ClientGameTestContext context) {
-		click(context, screen(context).tabButtons().get(2));
+		click(context, screen(context).tabButtons().get(3));
 		context.waitTicks(8);
-		check(context, s -> s.tab() == N4yMainScreen.Tab.APPEARANCE, "clicking the third tab did not open Appearance");
+		check(context, s -> s.tab() == N4yMainScreen.Tab.APPEARANCE, "clicking the Appearance tab did not open it");
 		context.takeScreenshot("n4y-06-appearance");
 
 		List<Theme> themes = Themes.ALL;
@@ -280,6 +397,12 @@ public final class N4yClientGameTest implements FabricClientGameTest {
 			}
 			if (mc.options.hideGui) {
 				throw new AssertionError("The vanilla HUD was not restored after disabling Hide HUD");
+			}
+			if (mc.options.gamma().get() > 1.0) {
+				throw new AssertionError("Fullbright left the brightness turned up: " + mc.options.gamma().get());
+			}
+			if (ModuleFlags.noHurtCam || ModuleFlags.hideHand || ModuleFlags.noFireOverlay) {
+				throw new AssertionError("A render flag was left on after disabling every module");
 			}
 			for (Module module : N4yClient.get().modules().all()) {
 				if (module.isEnabled()) {

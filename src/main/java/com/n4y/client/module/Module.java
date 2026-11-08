@@ -23,6 +23,7 @@ public abstract class Module {
 	private boolean enabled;
 	private int key = UNBOUND;
 	private Runnable changeListener = () -> { };
+	private java.util.function.Consumer<Module> stateListener = module -> { };
 
 	protected Module(String id, ModuleCategory category, Icon icon) {
 		this.id = id;
@@ -76,6 +77,11 @@ public abstract class Module {
 		this.changeListener = listener;
 	}
 
+	/** Set by the {@link ModuleManager} so being switched on or off can be announced. */
+	public final void setStateListener(java.util.function.Consumer<Module> listener) {
+		this.stateListener = listener;
+	}
+
 	public final void toggle() {
 		setEnabled(!enabled);
 	}
@@ -97,6 +103,7 @@ public abstract class Module {
 			N4y.LOGGER.error("Module '{}' failed to {}", id, value ? "enable" : "disable", t);
 		}
 		changeListener.run();
+		stateListener.accept(this);
 	}
 
 	protected void onEnable(Minecraft mc) {

@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "com.n4y.client.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"GameRendererMixin",
+		"ItemInHandRendererMixin",
+		"OptionInstanceAccessor",
+		"ScreenEffectRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

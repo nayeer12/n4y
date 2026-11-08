@@ -16,6 +16,10 @@ public final class GlassRenderer {
 	public static final int CORNERS_ALL = 0b11;
 	public static final int CORNERS_TOP = 0b01;
 	public static final int CORNERS_BOTTOM = 0b10;
+	/** Bands used to shade a rounded corner that sits on a gradient. */
+	private static final int MAX_GRADIENT_BANDS = 8;
+	/** Channel difference below which a gradient is drawn as a flat colour. */
+	private static final int FLAT_TOLERANCE = 6;
 
 	private GlassRenderer() {
 	}
@@ -166,8 +170,9 @@ public final class GlassRenderer {
 	}
 
 	/**
-	 * Corner tinted with the gradient: one blit when the color is flat, otherwise one blit per
-	 * pixel row so the corner matches the neighbouring gradient fill exactly.
+	 * Corner tinted with the gradient. A flat colour, or one the eye cannot tell from flat, is
+	 * a single blit; a real gradient is drawn in a few horizontal bands instead of one blit per
+	 * pixel row, which keeps a window full of cards at a handful of draw calls.
 	 */
 	private static void cornerGradient(GuiGraphics g, ShapeTextures.Mask m, int x, int y, int u, int v,
 			int top, int bottom, int localY, int height) {
@@ -175,14 +180,28 @@ public final class GlassRenderer {
 		if (k <= 0) {
 			return;
 		}
-		if (top == bottom) {
-			corner(g, m, x, y, u, v, top);
+		if (isFlat(top, bottom)) {
+			corner(g, m, x, y, u, v, Colors.lerp(top, bottom, 0.5f));
 			return;
 		}
-		for (int row = 0; row < k; row++) {
-			int c = at(top, bottom, localY + row + 0.5f, height);
-			g.blit(RenderPipelines.GUI_TEXTURED, m.id(), x, y + row, u, v + row, k, 1, k, 1, m.size(), m.size(), c);
+		int bands = Math.min(k, MAX_GRADIENT_BANDS);
+		for (int band = 0; band < bands; band++) {
+			int from = band * k / bands;
+			int to = (band + 1) * k / bands;
+			if (to <= from) {
+				continue;
+			}
+			int c = at(top, bottom, localY + (from + to) / 2f, height);
+			g.blit(RenderPipelines.GUI_TEXTURED, m.id(), x, y + from, u, v + from, k, to - from, k, to - from, m.size(), m.size(), c);
 		}
+	}
+
+	/** True when two colours are close enough that a gradient between them is invisible. */
+	private static boolean isFlat(int a, int b) {
+		return Math.abs(Colors.alpha(a) - Colors.alpha(b)) <= FLAT_TOLERANCE
+				&& Math.abs(Colors.red(a) - Colors.red(b)) <= FLAT_TOLERANCE
+				&& Math.abs(Colors.green(a) - Colors.green(b)) <= FLAT_TOLERANCE
+				&& Math.abs(Colors.blue(a) - Colors.blue(b)) <= FLAT_TOLERANCE;
 	}
 
 	private static void strip(GuiGraphics g, ShapeTextures.Mask m, int x, int y, int w, int h, int u, int v, int rw, int rh, int color) {
