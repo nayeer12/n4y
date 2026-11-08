@@ -78,7 +78,7 @@ módulos cambian el juego de verdad y lo dejan como estaba. Las capturas quedan 
 
 </details>
 
-## Combat (en desarrollo)
+## Combat
 
 n4y está incorporando una categoría de Combat orientada a Crystal PvP. Alcance, sin rodeos:
 
@@ -93,7 +93,35 @@ Reglas que cumple todo Combat:
 - Se respetan los cooldowns y los límites normales del juego.
 - Nada de clics simulados, cadenas cifradas ni funciones para evadir detecciones.
 
-Estado: Fase 0 (sistema de ajustes) terminada. Los módulos llegan después, uno a uno.
+| Módulo | Ajustes | Qué hace |
+|---|---|---|
+| AutoCrystal | 5 | Con un cristal en la mano y la tecla pulsada, coloca sobre la obsidiana de la mira y golpea el cristal (o slime) de la mira |
+| AutoHitCrystal | 9 | Pone obsidiana, cambia al cristal y usa la misma lógica de AutoCrystal, con sus delays y probabilidades |
+| AnchorMacro | 14 | Con clic derecho sobre un anchor: lo carga con glowstone o lo detona desde el Explode Slot. La tecla Place (X) coloca, carga y deja un tótem en la mano |
+| Smart AutoTotem | 5 | Repone la mano secundaria y un slot de la hotbar con tótems, solo con tu inventario abierto |
+| TriggerBot | 15 | Golpea a quien tengas en la mira cuando pasa el delay del arma. Espada y hacha con temporizadores separados |
+
+Lo que conviene saber de cada uno:
+
+- **Ritmo:** colocar respeta los 4 ticks que vanilla impone entre usos. Los delays de los módulos de
+  cristal y anchor van en ticks (20 = 1 segundo); los de TriggerBot, en milisegundos.
+- **Safe Anchor** (activo por defecto): no detona si no hay tótem en la hotbar o en la mano
+  secundaria, si el anchor ya no está cargado, si llevas glowstone en una mano (lo cargarías en vez
+  de detonarlo) o si estás en el Nether, donde el anchor fija el spawn en vez de explotar.
+- **Only Own** solo conoce los anchors que este cliente colocó en esta sesión. Al reconectar,
+  cambiar de mundo o descargarse el chunk se olvidan, y nunca asume que un anchor sigue siendo tuyo.
+- **Smart AutoTotem** trabaja con el inventario normal de supervivencia. En creativo vanilla abre
+  otro menú y el módulo no lo toca. Con el inventario cerrado no hace absolutamente nada.
+- **TriggerBot** filtra jugadores por defecto, o cualquier entidad con *All Entities*. n4y no tiene
+  lista de amigos, así que no excluye a nadie por nombre.
+- **Only Crit** usa las siete condiciones de crítico de vanilla: estar cayendo, no estar en el
+  suelo, no trepar, no estar en agua, sin movilidad restringida, no ir montado y no esprintar.
+- **Swing Hand** apagado ataca sin la animación del brazo, que es lo que hacía el original. Ten en
+  cuenta que eso hace el golpe menos visible para los demás.
+
+Respecto a los códigos originales se quitaron Click Simulation (falseaba el contador de CPS), Particle
+Chance, Stop on Kill de AutoCrystal, Fake Punch, Damage Tick, Anti-Weakness, Stray Bypass (esquivaba
+un anticheat), Mode, Auto Open, Stay Open For y el inventario falso.
 
 ## Configuración y perfiles
 

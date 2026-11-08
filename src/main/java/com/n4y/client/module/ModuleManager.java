@@ -30,6 +30,12 @@ import com.n4y.client.module.impl.HideHudModule;
 import com.n4y.client.module.impl.NoViewBobbingModule;
 import com.n4y.client.module.impl.ToggleSneakModule;
 import com.n4y.client.module.impl.ZoomModule;
+import com.n4y.client.module.impl.combat.AnchorMacroModule;
+import com.n4y.client.module.impl.combat.AutoCrystalModule;
+import com.n4y.client.module.impl.combat.AutoHitCrystalModule;
+import com.n4y.client.module.impl.combat.SmartAutoTotemModule;
+import com.n4y.client.module.impl.combat.TriggerBotModule;
+import com.n4y.client.combat.CombatContext;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -46,8 +52,9 @@ public final class ModuleManager {
 	 * Registers the built-in modules. Order here is the order shown in the interface.
 	 *
 	 * @param onScreenshot where the Clean Screenshot module reports the saved file
+	 * @param combat       services the combat modules share
 	 */
-	public void registerDefaults(Consumer<Component> onScreenshot) {
+	public void registerDefaults(Consumer<Component> onScreenshot, CombatContext combat) {
 		// Movement
 		register(new AutoSprintModule());
 		register(new AutoJumpModule());
@@ -68,7 +75,15 @@ public final class ModuleManager {
 		register(new CinematicModeModule(this));
 		register(new CleanScreenshotModule(onScreenshot));
 		register(new HideHandModule());
-		// Combat
+		// Combat: Crystal PvP for singleplayer and private worlds, crosshair only
+		AutoCrystalModule autoCrystal = new AutoCrystalModule(combat);
+		register(autoCrystal);
+		register(new AutoHitCrystalModule(combat, autoCrystal));
+		AnchorMacroModule anchorMacro = new AnchorMacroModule(combat);
+		anchorMacro.listen();
+		register(anchorMacro);
+		register(new SmartAutoTotemModule());
+		register(new TriggerBotModule(combat));
 		HitMarkerModule hitMarker = new HitMarkerModule();
 		hitMarker.listen();
 		register(hitMarker);

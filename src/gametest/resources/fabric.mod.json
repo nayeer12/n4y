@@ -5,7 +5,10 @@
 	"name": "n4y Client GameTests",
 	"environment": "client",
 	"entrypoints": {
-		"fabric-client-gametest": ["com.n4y.client.test.N4yClientGameTest"]
+		"fabric-client-gametest": [
+			"com.n4y.client.test.N4yClientGameTest",
+			"com.n4y.client.test.N4yCombatGameTest"
+		]
 	},
 	"depends": {
 		"n4y": "*"

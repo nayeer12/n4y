@@ -1,5 +1,6 @@
 package com.n4y.client;
 
+import com.n4y.client.combat.CombatContext;
 import com.n4y.client.config.ConfigManager;
 import com.n4y.client.core.event.EventBus;
 import com.n4y.client.core.event.Priority;
@@ -35,6 +36,7 @@ public final class N4yClient implements ClientModInitializer {
 	private final long startedAt = System.currentTimeMillis();
 	private ConfigManager configManager;
 	private KeybindManager keybindManager;
+	private CombatContext combat;
 
 	public static N4yClient get() {
 		return instance;
@@ -68,6 +70,10 @@ public final class N4yClient implements ClientModInitializer {
 		return hudManager.notifications();
 	}
 
+	public CombatContext combat() {
+		return combat;
+	}
+
 	/** How long this play session has been running, used by the on-screen statistics. */
 	public long sessionSeconds() {
 		return (System.currentTimeMillis() - startedAt) / 1000L;
@@ -81,8 +87,10 @@ public final class N4yClient implements ClientModInitializer {
 		N4yPaths.ensureCreated();
 		N4yKeybinds.register();
 		N4yKeybinds.onOpenGui(mc -> mc.setScreen(new N4yMainScreen()));
+		combat = CombatContext.create((title, detail) -> hudManager.notifications()
+				.push(Icons.FLAME, title, detail, false));
 		moduleManager.registerDefaults(message -> hudManager.notifications()
-				.push(Icons.CAMERA, Component.translatable("n4y.notify.screenshot"), message, true));
+				.push(Icons.CAMERA, Component.translatable("n4y.notify.screenshot"), message, true), combat);
 		moduleManager.attach(eventBus);
 		hudManager.register();
 
@@ -108,6 +116,8 @@ public final class N4yClient implements ClientModInitializer {
 				keybindManager.tick(mc.screen == null);
 			}
 			configManager.tick();
+			// The shared use cooldown counts down before any module acts this tick.
+			combat.interactions().tick();
 			eventBus.post(new ClientTickEvent(mc));
 		});
 
