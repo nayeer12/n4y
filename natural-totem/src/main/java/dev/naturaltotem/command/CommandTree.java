@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import dev.naturaltotem.config.Option;
 import dev.naturaltotem.config.Options;
+import dev.naturaltotem.config.Presets;
 import net.minecraft.command.CommandSource;
 
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ import java.util.List;
 public final class CommandTree {
 
     private static final List<String> SUBCOMMANDS = List.of(
-            "help", "status", "on", "off", "toggle", "list", "get", "set", "reset", "save", "reload");
+            "help", "status", "on", "off", "toggle", "list", "get", "set", "reset", "preset", "save", "reload");
 
     private CommandTree() {
     }
@@ -56,6 +57,8 @@ public final class CommandTree {
                 case "get" -> node.then(argument("ajuste", keys));
                 case "reset" -> node.then(argument("ajuste", keysAndAll));
                 case "list" -> node.then(argument("texto", keys));
+                case "preset" -> node.then(argument("grupo", (context, builder) ->
+                        CommandSource.suggestMatching(Presets.names(), builder)));
                 case "set" -> node.then(argument("ajuste", keys).then(valueArgument(values)));
                 default -> {
                     // Las demás órdenes no llevan argumentos.

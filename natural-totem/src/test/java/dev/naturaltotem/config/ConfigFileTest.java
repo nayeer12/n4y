@@ -18,7 +18,7 @@ class ConfigFileTest {
     void writingAndReadingBackGivesTheSameValues() {
         TotemConfig original = new TotemConfig();
         original.set(Options.HOTBAR_SLOT, 2);
-        original.set(Options.MOVE_MS, 250L);
+        original.set(Options.MOVE_MS_MIN, 250L);
         original.set(Options.ENABLED, false);
         original.set(Options.ITEM, "minecraft:golden_apple");
 
@@ -49,7 +49,7 @@ class ConfigFileTest {
                 "esto no es una línea válida",
                 "  fill-offhand = false  "), config);
 
-        assertEquals(120L, config.get(Options.MOVE_MS));
+        assertEquals(120L, config.get(Options.MOVE_MS_MIN));
         assertFalse(config.get(Options.FILL_OFFHAND));
         assertEquals(9, config.get(Options.HOTBAR_SLOT), "un valor inválido deja el anterior");
         assertEquals(3, warnings.size(), warnings.toString());
@@ -93,12 +93,12 @@ class ConfigFileTest {
         FileConfigStore store = new FileConfigStore(file, config, logged::add);
         store.load();
 
-        config.set(Options.MOVE_MS, 200L);
+        config.set(Options.MOVE_MS_MIN, 200L);
         Files.writeString(file, "move-ms=qué\n", StandardCharsets.UTF_8);
 
         String message = store.reload();
         assertTrue(message.contains("errores"), message);
-        assertEquals(200L, config.get(Options.MOVE_MS), "los ajustes en uso no se pierden");
+        assertEquals(200L, config.get(Options.MOVE_MS_MIN), "los ajustes en uso no se pierden");
         assertFalse(logged.isEmpty());
     }
 

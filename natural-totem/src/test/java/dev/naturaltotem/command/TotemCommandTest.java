@@ -2,6 +2,7 @@ package dev.naturaltotem.command;
 
 import dev.naturaltotem.config.ConfigStore;
 import dev.naturaltotem.config.Options;
+import dev.naturaltotem.config.Presets;
 import dev.naturaltotem.config.TotemConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,9 +71,9 @@ class TotemCommandTest {
     @Test
     void setChangesTheValueSavesItAndReportsIt() {
         run("set move-ms 80");
-        assertEquals(80L, config.get(Options.MOVE_MS));
+        assertEquals(80L, config.get(Options.MOVE_MS_MIN));
         assertEquals(1, store.saves());
-        assertTrue(out.text().contains("60 → 80"), out.text());
+        assertTrue(out.text().contains("50 → 80"), out.text());
         assertTrue(out.errors.isEmpty());
     }
 
@@ -81,7 +82,7 @@ class TotemCommandTest {
         run("hotbar-slot 1");
         assertEquals(1, config.get(Options.HOTBAR_SLOT));
         run("move_ms 10");
-        assertEquals(10L, config.get(Options.MOVE_MS));
+        assertEquals(10L, config.get(Options.MOVE_MS_MIN));
     }
 
     @Test
@@ -135,10 +136,10 @@ class TotemCommandTest {
 
     @Test
     void resetRestoresOneOptionOrAllOfThem() {
-        run("set move-ms 500");
+        run("set move-ms 80");
         run("set debug true");
         run("reset move-ms");
-        assertEquals(60L, config.get(Options.MOVE_MS));
+        assertEquals(50L, config.get(Options.MOVE_MS_MIN));
         assertTrue(config.debug());
 
         run("reset");
@@ -148,19 +149,19 @@ class TotemCommandTest {
 
     @Test
     void listShowsEveryOptionAndMarksTheChangedOnes() {
-        run("set move-ms 120");
+        run("set move-ms 80");
         out.lines.clear();
         run("list");
         String text = out.text();
         for (var option : Options.ALL) {
             assertTrue(text.contains(option.key() + " = "), "falta " + option.key());
         }
-        assertTrue(text.contains("move-ms = 120 *"), text);
+        assertTrue(text.contains("move-ms-min = 80 *"), text);
 
         out.lines.clear();
         run("list fill");
         assertTrue(out.text().contains("fill-hotbar"));
-        assertFalse(out.text().contains("move-ms = "));
+        assertFalse(out.text().contains("move-ms-min = "));
 
         out.lines.clear();
         run("list zzz");
@@ -171,7 +172,7 @@ class TotemCommandTest {
     void getExplainsTheOption() {
         run("get source-order");
         String text = out.text();
-        assertTrue(text.contains("source-order = main-first"), text);
+        assertTrue(text.contains("source-order = nearest-main"), text);
         assertTrue(text.contains("main-first|hotbar-first|ascending"), text);
     }
 
@@ -197,9 +198,9 @@ class TotemCommandTest {
         assertEquals(1, store.saves(), "un cambio se guarda solo");
 
         // Un cambio hecho fuera del comando, como si se hubiera editado el archivo a mano.
-        config.set(Options.MOVE_MS, 10L);
+        config.set(Options.MOVE_MS_MIN, 10L);
         run("reload");
-        assertEquals(300L, config.get(Options.MOVE_MS));
+        assertEquals(300L, config.get(Options.MOVE_MS_MIN));
         assertEquals(1, store.reloads());
         assertTrue(out.text().contains("recargada"), out.text());
     }
@@ -238,7 +239,70 @@ class TotemCommandTest {
 
     @Test
     void settingTheSameValueTwiceIsNotReportedAsAChange() {
-        run("set move-ms 60");
-        assertTrue(out.text().contains("ya valía 60"), out.text());
+        run("set move-ms 50");
+        assertTrue(out.text().contains("ya valía 50"), out.text());
+    }
+
+    @Test
+    void presetClassicRestoresTheOldBehaviorAndIsSaved() {
+        run("set move-ms 80");
+        out.lines.clear();
+        run("preset classic");
+
+        assertTrue(Presets.matches(config, Presets.CLASSIC), out.text());
+        assertEquals(60L, config.get(Options.MOVE_MS_MIN));
+        assertFalse(config.continuous());
+        assertTrue(out.text().contains("classic"), out.text());
+        assertTrue(out.errors.isEmpty());
+        assertTrue(store.saves() >= 2);
+    }
+
+    @Test
+    void aPresetLeavesThePlayerPreferencesAlone() {
+        run("set hotbar-slot 3");
+        run("set item minecraft:golden_apple");
+        run("set announce true");
+        run("set fill-offhand false");
+        run("preset classic");
+
+        assertEquals(3, config.get(Options.HOTBAR_SLOT));
+        assertEquals("minecraft:golden_apple", config.itemId());
+        assertTrue(config.announce(), "un grupo no debe apagar los avisos que pediste");
+        assertFalse(config.get(Options.FILL_OFFHAND));
+        assertFalse(config.continuous(), "lo que sí cambia es la forma de actuar");
+        assertEquals(60L, config.get(Options.MOVE_MS_MIN));
+    }
+
+    @Test
+    void presetWithoutNameOrWithAnUnknownOneExplainsTheChoices() {
+        run("preset");
+        assertEquals(1, out.errors.size());
+        assertTrue(out.text().contains("classic"), out.text());
+
+        out.lines.clear();
+        out.errors.clear();
+        run("preset turbo");
+        assertEquals(1, out.errors.size());
+        assertTrue(out.text().contains("default"), out.text());
+    }
+
+    @Test
+    void anUpsideDownRangeIsWarnedAboutWhenItIsSet() {
+        run("set move-ms-max 10");
+        assertEquals(1, out.errors.size(), out.text());
+        assertTrue(out.errors.getFirst().contains("move-ms-max"), out.errors.toString());
+        assertEquals(10L, config.get(Options.MOVE_MS_MAX), "el valor se guarda igual, solo se avisa");
+    }
+
+    @Test
+    void statusTellsWhetherItKeepsWatching() {
+        run("status");
+        assertTrue(out.text().contains("sigue vigilando"), out.text());
+
+        out.lines.clear();
+        run("set continuous false");
+        out.lines.clear();
+        run("status");
+        assertTrue(out.text().contains("una pasada por apertura"), out.text());
     }
 }

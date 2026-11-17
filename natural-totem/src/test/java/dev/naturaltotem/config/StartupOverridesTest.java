@@ -24,7 +24,7 @@ class StartupOverridesTest {
                 map("naturaltotem.move-ms", "80", "naturaltotem.hotbar-slot", "1", "java.version", "21"),
                 Map.of());
 
-        assertEquals(80L, config.get(Options.MOVE_MS));
+        assertEquals(80L, config.get(Options.MOVE_MS_MIN));
         assertEquals(1, config.get(Options.HOTBAR_SLOT));
         assertEquals(2, result.applied().size(), result.applied().toString());
         assertEquals(0, result.warnings().size());
@@ -38,7 +38,7 @@ class StartupOverridesTest {
                 Map.of());
 
         assertFalse(config.enabled());
-        assertEquals(0L, config.get(Options.MOVE_MS));
+        assertEquals(0L, config.get(Options.MOVE_MS_MIN));
         assertEquals(dev.naturaltotem.RefillPlanner.SourceOrder.ASCENDING, config.get(Options.SOURCE_ORDER));
     }
 

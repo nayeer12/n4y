@@ -1,12 +1,16 @@
 package dev.naturaltotem.config;
 
+import dev.naturaltotem.CursorGlide;
 import dev.naturaltotem.RefillPlanner;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.random.RandomGenerator;
 
 /**
  * Valores actuales de los ajustes.
@@ -66,6 +70,12 @@ public final class TotemConfig {
         listener.accept(null);
     }
 
+    /** Aplica varios ajustes de golpe y avisa una sola vez. */
+    public void applyAll(Map<Option<?>, Object> changes) {
+        changes.forEach((option, value) -> values.put(option.key(), value));
+        listener.accept(null);
+    }
+
     @SuppressWarnings("unchecked")
     private boolean setUnchecked(Option<?> option, Object value) {
         return set((Option<Object>) option, value);
@@ -121,13 +131,27 @@ public final class TotemConfig {
         return get(Options.HOTBAR_SLOT) - 1;
     }
 
-    public long moveNanos() {
-        return get(Options.MOVE_MS) * 1_000_000L;
+    /** Duración del próximo acercamiento del cursor, sorteada dentro del margen configurado. */
+    public long nextMoveNanos(RandomGenerator random) {
+        return CursorGlide.randomBetween(get(Options.MOVE_MS_MIN), get(Options.MOVE_MS_MAX), random) * 1_000_000L;
     }
 
-    /** El temporizador exige un intervalo positivo; 0 ms significa "sin espera". */
-    public long actionIntervalNanos() {
-        return Math.max(1L, get(Options.ACTION_INTERVAL_MS) * 1_000_000L);
+    /**
+     * Espera hasta la próxima acción, sorteada dentro del margen configurado.
+     * El temporizador exige un valor positivo, así que 0 ms significa "sin espera".
+     */
+    public long nextActionIntervalNanos(RandomGenerator random) {
+        long millis = CursorGlide.randomBetween(
+                get(Options.ACTION_INTERVAL_MS_MIN), get(Options.ACTION_INTERVAL_MS_MAX), random);
+        return Math.max(1L, millis * 1_000_000L);
+    }
+
+    public long retryNanos() {
+        return get(Options.RETRY_MS) * 1_000_000L;
+    }
+
+    public boolean continuous() {
+        return get(Options.CONTINUOUS);
     }
 
     public boolean requireFocus() {
@@ -136,6 +160,15 @@ public final class TotemConfig {
 
     public boolean moveCursor() {
         return get(Options.MOVE_CURSOR);
+    }
+
+    /** Curvatura del recorrido en tanto por uno (el ajuste se expone en por ciento). */
+    public double curvature() {
+        return get(Options.CURVE) / 100.0;
+    }
+
+    public double aimJitter() {
+        return get(Options.AIM_JITTER);
     }
 
     public boolean skipWhileClicking() {
@@ -167,5 +200,23 @@ public final class TotemConfig {
     /** @return {@code true} si no hay ninguna casilla que atender con los ajustes actuales */
     public boolean nothingToFill() {
         return !get(Options.FILL_HOTBAR) && !get(Options.FILL_OFFHAND);
+    }
+
+    /**
+     * Combinaciones de ajustes que seguramente no son lo que se quería. No son errores: el mod
+     * funciona igual, pero conviene decirlas en voz alta al cambiar un ajuste o al pedir el estado.
+     */
+    public List<String> warnings() {
+        List<String> warnings = new ArrayList<>();
+        if (nothingToFill()) {
+            warnings.add("fill-hotbar y fill-offhand están los dos en false: no hay nada que rellenar.");
+        }
+        if (get(Options.MOVE_MS_MAX) < get(Options.MOVE_MS_MIN)) {
+            warnings.add("move-ms-max es menor que move-ms-min: se usará siempre el mínimo.");
+        }
+        if (get(Options.ACTION_INTERVAL_MS_MAX) < get(Options.ACTION_INTERVAL_MS_MIN)) {
+            warnings.add("action-interval-ms-max es menor que el mínimo: se usará siempre el mínimo.");
+        }
+        return warnings;
     }
 }

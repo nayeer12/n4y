@@ -28,8 +28,48 @@ public final class RefillPlanner {
         /** Barra rápida primero, luego el inventario principal. */
         HOTBAR_FIRST,
         /** Índice ascendente, de la casilla 0 a la 35. */
-        ASCENDING
+        ASCENDING,
+        /** El tótem más cercano al destino en la pantalla, venga de donde venga. */
+        NEAREST,
+        /** El más cercano del inventario principal; solo baja a la barra rápida si no queda ninguno. */
+        NEAREST_MAIN
     }
+
+    /**
+     * Dónde se dibuja cada casilla. Sirve para elegir el tótem más cercano y para que el
+     * recorrido del cursor sea corto.
+     */
+    public interface Geometry {
+        /** @return coordenada x de la casilla en la pantalla, o {@code Integer.MIN_VALUE} si no se conoce */
+        int x(int slot);
+
+        int y(int slot);
+    }
+
+    /**
+     * Colocación de las casillas en la pantalla de inventario de Minecraft: tres filas de
+     * nueve, la barra rápida debajo y la mano secundaria junto al muñeco.
+     *
+     * <p>Se usa cuando no hay una pantalla abierta de la que leer las posiciones reales,
+     * sobre todo en las pruebas.
+     */
+    public static final Geometry VANILLA_GEOMETRY = new Geometry() {
+        @Override
+        public int x(int slot) {
+            if (slot == OFFHAND_SLOT) {
+                return 77;
+            }
+            return slot <= LAST_HOTBAR_SLOT ? 8 + 18 * slot : 8 + 18 * ((slot - 9) % 9);
+        }
+
+        @Override
+        public int y(int slot) {
+            if (slot == OFFHAND_SLOT) {
+                return 62;
+            }
+            return slot <= LAST_HOTBAR_SLOT ? 142 : 84 + 18 * ((slot - 9) / 9);
+        }
+    };
 
     /**
      * Reglas del rellenado.
@@ -62,17 +102,24 @@ public final class RefillPlanner {
         return next(totems, offhandTotem, Options.LEGACY);
     }
 
+    /** Planifica con la colocación estándar de la pantalla de inventario. */
+    public static Move next(boolean[] totems, boolean offhandTotem, Options options) {
+        return next(totems, offhandTotem, options, VANILLA_GEOMETRY);
+    }
+
     /**
      * @param totems       una posición por casilla del inventario principal: {@code true} si ya tiene el objeto
      * @param offhandTotem si la mano secundaria ya tiene el objeto
      * @param options      reglas de rellenado
+     * @param geometry     dónde se dibuja cada casilla, para los órdenes por cercanía
      * @return el intercambio que toca, o {@code null} si no hay nada que hacer
      */
-    public static Move next(boolean[] totems, boolean offhandTotem, Options options) {
+    public static Move next(boolean[] totems, boolean offhandTotem, Options options, Geometry geometry) {
         if (totems.length != MAIN_SLOTS) {
             throw new IllegalArgumentException("Expected 36 inventory slots");
         }
         Objects.requireNonNull(options, "options");
+        Objects.requireNonNull(geometry, "geometry");
 
         int destination = destination(totems, offhandTotem, options);
         if (destination < 0) {
@@ -80,7 +127,7 @@ public final class RefillPlanner {
         }
         // La casilla que se mantiene llena nunca sirve de origen: es el destino del otro intercambio.
         int reserved = options.fillHotbar() ? options.hotbarSlot() : -1;
-        int source = findSource(totems, options.order(), destination, reserved);
+        int source = findSource(totems, options.order(), destination, reserved, geometry);
         return source < 0 ? null : new Move(source, destination);
     }
 
@@ -99,27 +146,62 @@ public final class RefillPlanner {
         return offhandNeeds ? OFFHAND_SLOT : -1;
     }
 
-    private static int findSource(boolean[] totems, SourceOrder order, int destination, int reserved) {
+    private static int findSource(boolean[] totems, SourceOrder order, int destination, int reserved,
+                                  Geometry geometry) {
         return switch (order) {
-            case MAIN_FIRST -> {
-                int found = scan(totems, LAST_HOTBAR_SLOT + 1, MAIN_SLOTS, destination, reserved);
-                yield found >= 0 ? found : scan(totems, 0, LAST_HOTBAR_SLOT + 1, destination, reserved);
-            }
-            case HOTBAR_FIRST -> {
-                int found = scan(totems, 0, LAST_HOTBAR_SLOT + 1, destination, reserved);
-                yield found >= 0 ? found : scan(totems, LAST_HOTBAR_SLOT + 1, MAIN_SLOTS, destination, reserved);
-            }
+            case MAIN_FIRST -> firstOf(
+                    scan(totems, LAST_HOTBAR_SLOT + 1, MAIN_SLOTS, destination, reserved),
+                    () -> scan(totems, 0, LAST_HOTBAR_SLOT + 1, destination, reserved));
+            case HOTBAR_FIRST -> firstOf(
+                    scan(totems, 0, LAST_HOTBAR_SLOT + 1, destination, reserved),
+                    () -> scan(totems, LAST_HOTBAR_SLOT + 1, MAIN_SLOTS, destination, reserved));
             case ASCENDING -> scan(totems, 0, MAIN_SLOTS, destination, reserved);
+            case NEAREST -> nearest(totems, 0, MAIN_SLOTS, destination, reserved, geometry);
+            case NEAREST_MAIN -> firstOf(
+                    nearest(totems, LAST_HOTBAR_SLOT + 1, MAIN_SLOTS, destination, reserved, geometry),
+                    () -> nearest(totems, 0, LAST_HOTBAR_SLOT + 1, destination, reserved, geometry));
         };
+    }
+
+    private static int firstOf(int found, java.util.function.IntSupplier fallback) {
+        return found >= 0 ? found : fallback.getAsInt();
     }
 
     private static int scan(boolean[] totems, int from, int to, int destination, int reserved) {
         for (int slot = from; slot < to; slot++) {
-            if (totems[slot] && slot != destination && slot != reserved) {
+            if (usable(totems, slot, destination, reserved)) {
                 return slot;
             }
         }
         return -1;
+    }
+
+    /**
+     * El tótem cuya casilla se dibuja más cerca del destino. Con la misma distancia gana el
+     * índice menor, así que la elección no depende del orden de recorrido.
+     */
+    private static int nearest(boolean[] totems, int from, int to, int destination, int reserved, Geometry geometry) {
+        int best = -1;
+        long bestDistance = Long.MAX_VALUE;
+        int destinationX = geometry.x(destination);
+        int destinationY = geometry.y(destination);
+        for (int slot = from; slot < to; slot++) {
+            if (!usable(totems, slot, destination, reserved)) {
+                continue;
+            }
+            long dx = geometry.x(slot) - (long) destinationX;
+            long dy = geometry.y(slot) - (long) destinationY;
+            long distance = dx * dx + dy * dy;
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = slot;
+            }
+        }
+        return best;
+    }
+
+    private static boolean usable(boolean[] totems, int slot, int destination, int reserved) {
+        return totems[slot] && slot != destination && slot != reserved;
     }
 
     /**

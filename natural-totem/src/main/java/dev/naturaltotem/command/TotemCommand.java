@@ -3,6 +3,7 @@ package dev.naturaltotem.command;
 import dev.naturaltotem.config.ConfigStore;
 import dev.naturaltotem.config.Option;
 import dev.naturaltotem.config.Options;
+import dev.naturaltotem.config.Presets;
 import dev.naturaltotem.config.TotemConfig;
 
 import java.util.ArrayList;
@@ -81,6 +82,7 @@ public final class TotemCommand {
             case "get", "ver" -> get(rest, out);
             case "set", "poner" -> set(rest, out);
             case "reset", "default", "defaults" -> reset(rest, out);
+            case "preset", "perfil" -> preset(rest, out);
             case "save", "guardar" -> out.success(store.save());
             case "reload", "recargar" -> out.success(store.reload());
             default -> shorthand(args, out);
@@ -97,6 +99,8 @@ public final class TotemCommand {
         out.info("/" + NAME + " get <ajuste> — muestra un ajuste y qué acepta");
         out.info("/" + NAME + " set <ajuste> <valor> — cambia un ajuste (también vale /" + NAME + " <ajuste> <valor>)");
         out.info("/" + NAME + " reset [ajuste|all] — vuelve a los valores por defecto");
+        out.info("/" + NAME + " preset <" + String.join("|", Presets.names())
+                + "> — cómo se mueve y cuándo actúa (classic = como el 1.4.0)");
         out.info("/" + NAME + " save | reload — guarda o vuelve a leer " + store.location());
         out.info("Al arrancar también se leen -Dnaturaltotem.<ajuste>=<valor> y NATURAL_TOTEM_<AJUSTE>.");
     }
@@ -108,11 +112,21 @@ public final class TotemCommand {
         String mano = config.get(Options.FILL_OFFHAND) ? "mano secundaria sí" : "mano secundaria no";
         out.info("Objeto: " + objetivo + " — " + casilla + ", " + mano
                 + (config.get(Options.OFFHAND_FIRST) ? " (mano primero)" : ""));
-        out.info("Tiempos: cursor " + config.get(Options.MOVE_MS) + " ms, intervalo "
-                + config.get(Options.ACTION_INTERVAL_MS) + " ms"
+        out.info("Origen: " + config.printed(Options.SOURCE_ORDER)
+                + (config.continuous()
+                        ? " — sigue vigilando con el inventario abierto"
+                        : " — una pasada por apertura"));
+        out.info("Tiempos: cursor " + range(Options.MOVE_MS_MIN, Options.MOVE_MS_MAX) + " ms, intervalo "
+                + range(Options.ACTION_INTERVAL_MS_MIN, Options.ACTION_INTERVAL_MS_MAX) + " ms"
                 + (config.moveCursor() ? "" : ", sin mover el cursor"));
-        if (config.nothingToFill()) {
-            out.error("fill-hotbar y fill-offhand están los dos en false: no hay nada que rellenar.");
+        for (String warning : config.warnings()) {
+            out.error(warning);
+        }
+        for (Presets.Preset preset : Presets.ALL) {
+            if (Presets.matches(config, preset)) {
+                out.info("Se mueve como el grupo \"" + preset.name() + "\": " + preset.description());
+                break;
+            }
         }
         List<String> changed = new ArrayList<>();
         for (Option<?> option : Options.ALL) {
@@ -219,9 +233,34 @@ public final class TotemCommand {
         } else {
             out.success(option.key() + ": " + previous + " → " + now);
         }
-        if (config.nothingToFill()) {
-            out.error("Aviso: fill-hotbar y fill-offhand están los dos en false, el mod no hará nada.");
+        for (String warning : config.warnings()) {
+            out.error("Aviso: " + warning);
         }
+    }
+
+    private void preset(String[] args, Feedback out) {
+        if (args.length == 0) {
+            out.error("Uso: /" + NAME + " preset <" + String.join("|", Presets.names()) + ">");
+            for (Presets.Preset preset : Presets.ALL) {
+                out.info(preset.name() + " — " + preset.description());
+            }
+            return;
+        }
+        Presets.Preset preset = Presets.byName(args[0]).orElse(null);
+        if (preset == null) {
+            out.error("No existe el grupo \"" + args[0] + "\". Hay: " + String.join(", ", Presets.names()) + ".");
+            return;
+        }
+        config.applyAll(preset.values());
+        store.autoSave();
+        out.success("Aplicado el grupo \"" + preset.name() + "\": " + preset.description());
+        out.info("Solo cambia cómo se mueve y cuándo actúa; la casilla, el objeto y los avisos se quedan como están.");
+    }
+
+    private String range(Option<Long> min, Option<Long> max) {
+        long low = config.get(min);
+        long high = config.get(max);
+        return high > low ? low + "-" + high : Long.toString(low);
     }
 
     private void reset(String[] args, Feedback out) {

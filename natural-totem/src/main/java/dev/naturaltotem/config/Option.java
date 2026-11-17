@@ -27,22 +27,30 @@ public final class Option<T> {
     private final T defaultValue;
     private final String valueHint;
     private final List<String> suggestions;
+    private final List<String> aliases;
     private final Function<String, T> parser;
     private final Function<T, String> printer;
 
     private Option(String key, String description, T defaultValue, String valueHint,
-                   List<String> suggestions, Function<String, T> parser, Function<T, String> printer) {
+                   List<String> suggestions, List<String> aliases,
+                   Function<String, T> parser, Function<T, String> printer) {
         this.key = Objects.requireNonNull(key, "key");
         this.description = Objects.requireNonNull(description, "description");
         this.defaultValue = Objects.requireNonNull(defaultValue, "defaultValue");
         this.valueHint = Objects.requireNonNull(valueHint, "valueHint");
         this.suggestions = List.copyOf(suggestions);
+        this.aliases = List.copyOf(aliases);
         this.parser = Objects.requireNonNull(parser, "parser");
         this.printer = Objects.requireNonNull(printer, "printer");
     }
 
     public String key() {
         return key;
+    }
+
+    /** Nombres antiguos que se siguen aceptando al leer el archivo o el comando. */
+    public List<String> aliases() {
+        return aliases;
     }
 
     public String description() {
@@ -93,7 +101,7 @@ public final class Option<T> {
     // --- fábricas -------------------------------------------------------
 
     public static Option<Boolean> ofBoolean(String key, boolean defaultValue, String description) {
-        return new Option<>(key, description, defaultValue, "true/false", List.of("true", "false"),
+        return new Option<>(key, description, defaultValue, "true/false", List.of("true", "false"), List.of(),
                 raw -> switch (raw.toLowerCase(Locale.ROOT)) {
                     case "true", "on", "yes", "y", "1", "si", "sí" -> Boolean.TRUE;
                     case "false", "off", "no", "n", "0" -> Boolean.FALSE;
@@ -115,7 +123,7 @@ public final class Option<T> {
         } else {
             suggestions.add(Integer.toString(defaultValue));
         }
-        return new Option<>(key, description, defaultValue, hint, suggestions,
+        return new Option<>(key, description, defaultValue, hint, suggestions, List.of(),
                 raw -> {
                     int value;
                     try {
@@ -133,11 +141,16 @@ public final class Option<T> {
 
     public static Option<Long> ofLong(String key, long defaultValue, long min, long max, String description,
                                       List<String> suggestions) {
+        return ofLong(key, defaultValue, min, max, description, suggestions, List.of());
+    }
+
+    public static Option<Long> ofLong(String key, long defaultValue, long min, long max, String description,
+                                      List<String> suggestions, List<String> aliases) {
         if (defaultValue < min || defaultValue > max) {
             throw new IllegalArgumentException("default out of range for " + key);
         }
         String hint = min + "-" + max;
-        return new Option<>(key, description, defaultValue, hint, suggestions,
+        return new Option<>(key, description, defaultValue, hint, suggestions, aliases,
                 raw -> {
                     long value;
                     try {
@@ -159,7 +172,7 @@ public final class Option<T> {
         for (E constant : type.getEnumConstants()) {
             names.add(constant.name().toLowerCase(Locale.ROOT).replace('_', '-'));
         }
-        return new Option<>(key, description, defaultValue, String.join("|", names), names,
+        return new Option<>(key, description, defaultValue, String.join("|", names), names, List.of(),
                 raw -> {
                     String wanted = raw.toLowerCase(Locale.ROOT).replace('-', '_');
                     for (E constant : type.getEnumConstants()) {
@@ -175,7 +188,7 @@ public final class Option<T> {
     /** Texto libre validado con un patrón; se usa para el identificador del objeto. */
     public static Option<String> ofString(String key, String defaultValue, String pattern, String valueHint,
                                           String description, List<String> suggestions) {
-        return new Option<>(key, description, defaultValue, valueHint, suggestions,
+        return new Option<>(key, description, defaultValue, valueHint, suggestions, List.of(),
                 raw -> {
                     if (!raw.matches(pattern)) {
                         throw new InvalidValueException("\"" + raw + "\" no tiene el formato esperado (" + valueHint + ")");
