@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "dev.naturaltotem.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "ClientCommandMixin",
+    "ClientMixin",
+    "HandledScreenAccess"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
