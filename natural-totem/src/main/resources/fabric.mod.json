@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "natural_totem",
+  "version": "${version}",
+  "name": "Natural Totem",
+  "description": "Rellena una casilla de la barra rápida y la mano secundaria con tótems usando los atajos de inventario. Configurable con /ntotem y con parámetros de arranque.",
+  "environment": "client",
+  "license": "MIT",
+  "entrypoints": {
+    "client": [
+      "dev.naturaltotem.NaturalTotemClient"
+    ]
+  },
+  "mixins": [
+    "natural_totem.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.18.4",
+    "minecraft": "1.21.11",
+    "java": ">=21"
+  }
+}
