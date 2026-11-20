@@ -194,12 +194,21 @@ asignada, hace la foto sin interfaz ni manos y lo restaura todo solo.
 ## Bot anti-AFK (aparte del mod)
 
 En `tools/afk-bot/` hay un bot de consola, independiente del cliente: entra a un
-servidor, camina adelante y atrás, salta y se desconecta solo a las 7 horas. Es
-Node.js con mineflayer, no abre el juego.
+servidor de Minecraft Java (Paper, Spigot o vanilla), camina adelante y atrás,
+salta y sale solo. Es Node.js con mineflayer, no abre el juego.
 
 ```bash
 cd tools/afk-bot && npm install
+
+# una sesión de 7 horas
 node afk-bot.js --host mi.servidor.com --user AfkBot --version 1.21.11
+
+# o entrar cada 7 horas, 10 minutos cada vez
+node afk-loop.js --host mi.servidor.com --user AfkBot --every 7h --stay 10m
 ```
+
+Sirve con servidores de plugins: `--cmd "/login miclave"` para AuthMe y compañía,
+y contesta solo al paquete de recursos obligatorio. Gasta 40 MB mientras espera
+la próxima ronda y 110 MB conectado.
 
 Detalles y opciones en `tools/afk-bot/README.md`.

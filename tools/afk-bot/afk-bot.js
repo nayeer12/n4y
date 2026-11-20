@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 'use strict'
 
-// Bot anti-AFK para Minecraft Java: entra al servidor, salta y camina
-// adelante/atras durante N horas (7 por defecto) y se desconecta solo.
+// Una sesion anti-AFK en un servidor de Minecraft Java (Paper, Spigot, vanilla):
+// entra, ejecuta los comandos de login si hacen falta, camina adelante y atras,
+// salta, y se desconecta solo al cumplirse el plazo.
+//
+// Para entrar cada X horas en vez de una sola vez, usar afk-loop.js.
 
 const mineflayer = require('mineflayer')
 
@@ -11,27 +14,42 @@ const mineflayer = require('mineflayer')
 const USAGE = `
 Uso: node afk-bot.js --host <ip> --user <nombre> [opciones]
 
-Opciones:
-  --host <ip>          direccion del servidor            (def: localhost)
-  --port <n>           puerto                            (def: 25565)
-  --user <nombre>      nick (offline) o correo (premium) (def: AfkBot)
-  --version <ver>      version del protocolo, ej 1.21.11 (def: autodetectar)
-  --auth <modo>        offline | microsoft               (def: offline)
-  --hours <n>          duracion en horas, admite decimales (def: 7)
-  --minutes <n>        minutos de duracion, se suman a --hours
-  --seconds <n>        segundos de duracion (util para pruebas)
-                       usar cualquiera de los tres anula el default de 7 h
+Servidor:
+  --host <ip>          direccion del servidor               (def: localhost)
+  --port <n>           puerto                               (def: 25565)
+  --user <nombre>      nick (offline) o correo (premium)    (def: AfkBot)
+  --version <ver>      version del protocolo, ej 1.21.11    (def: autodetectar)
+  --auth <modo>        offline | microsoft                  (def: offline)
+
+Duracion:
+  --stay <tiempo>      cuanto se queda, ej 7h, 90m, 45s     (def: 7h)
+  --hours <n>          horas (equivalente a --stay Nh)
+  --minutes <n>        minutos, se suman a --hours
+  --seconds <n>        segundos, para pruebas rapidas
+
+Servidores con plugins (Paper/Spigot):
+  --cmd <texto>        comando o mensaje al entrar; repetible en orden,
+                       ej --cmd "/login miclave" --cmd "/warp afk"
+  --join-delay <ms>    espera antes del primer comando      (def: 4000)
+  --cmd-delay <ms>     espera entre comandos                (def: 1500)
+  --pack <modo>        paquete de recursos: accept | deny | ignore (def: accept)
+
+Comportamiento y recursos:
+  --view-distance <n>  chunks que pide al servidor, 2 gasta menos RAM (def: 2)
   --no-jump            no saltar, solo caminar
-  --no-reconnect       no reconectar si el servidor lo expulsa
+  --no-reconnect       no reconectar si lo expulsan
   --quiet              no imprimir el chat del servidor
   --help               esta ayuda
 
-Variables de entorno equivalentes: MC_HOST, MC_PORT, MC_USER, MC_VERSION,
-MC_AUTH, MC_HOURS.
+Variables de entorno: MC_HOST, MC_PORT, MC_USER, MC_VERSION, MC_AUTH, MC_STAY.
 
-Ejemplo:
-  node afk-bot.js --host mi.servidor.com --user AfkBot --version 1.21.11
+Ejemplo en un Paper con AuthMe:
+  node afk-bot.js --host mi.servidor.com --user AfkBot --version 1.21.11 \\
+    --cmd "/login miclave" --stay 7h
 `
+
+const BOOL_FLAGS = new Set(['help', 'quiet', 'no-jump', 'no-reconnect'])
+const LIST_FLAGS = new Set(['cmd'])
 
 function parseArgs (argv) {
   const flags = {}
@@ -39,15 +57,13 @@ function parseArgs (argv) {
     const arg = argv[i]
     if (!arg.startsWith('--')) throw new Error(`Argumento inesperado: ${arg}`)
     const key = arg.slice(2)
-    if (key === 'help' || key.startsWith('no-') || key === 'quiet') {
-      flags[key] = true
-      continue
-    }
+    if (BOOL_FLAGS.has(key)) { flags[key] = true; continue }
     const value = argv[i + 1]
-    if (value === undefined || value.startsWith('--')) {
+    if (value === undefined || (value.startsWith('--') && value.length > 2)) {
       throw new Error(`Falta el valor de --${key}`)
     }
-    flags[key] = value
+    if (LIST_FLAGS.has(key)) (flags[key] ??= []).push(value)
+    else flags[key] = value
     i++
   }
   return flags
@@ -59,20 +75,54 @@ function num (value, name) {
   return n
 }
 
+// Acepta "7h", "90m", "45s", "1h30m" o un numero suelto, que se lee como horas.
+function parseDuration (text, name) {
+  const s = String(text).trim().toLowerCase()
+  if (s === '') throw new Error(`--${name} esta vacio`)
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.round(Number(s) * 3600000)
+
+  const unit = { h: 3600000, m: 60000, s: 1000 }
+  let total = 0
+  let rest = s
+  const re = /(\d+(?:\.\d+)?)\s*([hms])/g
+  let match
+  while ((match = re.exec(s)) !== null) {
+    total += Number(match[1]) * unit[match[2]]
+    rest = rest.replace(match[0], '')
+  }
+  if (rest.trim() !== '' || total === 0) {
+    throw new Error(`--${name} no se entiende: "${text}". Usar 7h, 90m, 45s o 1h30m`)
+  }
+  return Math.round(total)
+}
+
 function buildConfig (flags) {
-  // Si se indica cualquier unidad de tiempo, manda esa y no las 7 h por defecto.
-  const givenHours = flags.hours ?? process.env.MC_HOURS
-  const anyDuration = givenHours !== undefined || flags.minutes !== undefined || flags.seconds !== undefined
-  const hours = num(givenHours ?? (anyDuration ? 0 : 7), 'hours')
-  const minutes = num(flags.minutes ?? 0, 'minutes')
-  const seconds = num(flags.seconds ?? 0, 'seconds')
-  const durationMs = Math.round(((hours * 60 + minutes) * 60 + seconds) * 1000)
+  // Manda --stay/MC_STAY; si no, se suman --hours/--minutes/--seconds;
+  // si no se indica nada, 7 horas.
+  const stay = flags.stay ?? process.env.MC_STAY
+  let durationMs
+  if (stay !== undefined) {
+    durationMs = parseDuration(stay, 'stay')
+  } else if (flags.hours !== undefined || flags.minutes !== undefined || flags.seconds !== undefined) {
+    durationMs = Math.round(
+      ((num(flags.hours ?? 0, 'hours') * 60 + num(flags.minutes ?? 0, 'minutes')) * 60 +
+        num(flags.seconds ?? 0, 'seconds')) * 1000
+    )
+  } else {
+    durationMs = 7 * 3600000
+  }
   if (durationMs <= 0) throw new Error('La duracion total debe ser mayor que 0')
 
   const auth = flags.auth ?? process.env.MC_AUTH ?? 'offline'
-  if (auth !== 'offline' && auth !== 'microsoft') {
-    throw new Error('--auth debe ser offline o microsoft')
-  }
+  if (auth !== 'offline' && auth !== 'microsoft') throw new Error('--auth debe ser offline o microsoft')
+
+  const pack = flags.pack ?? 'accept'
+  if (!['accept', 'deny', 'ignore'].includes(pack)) throw new Error('--pack debe ser accept, deny o ignore')
+
+  const vd = flags['view-distance'] ?? '2'
+  const viewDistance = ['tiny', 'short', 'normal', 'far'].includes(vd)
+    ? vd
+    : Math.max(2, Math.round(num(vd, 'view-distance')))
 
   return {
     host: flags.host ?? process.env.MC_HOST ?? 'localhost',
@@ -81,6 +131,11 @@ function buildConfig (flags) {
     version: flags.version ?? process.env.MC_VERSION ?? false, // false = autodetectar
     auth,
     durationMs,
+    commands: flags.cmd ?? [],
+    joinDelay: Math.round(num(flags['join-delay'] ?? 4000, 'join-delay')),
+    cmdDelay: Math.round(num(flags['cmd-delay'] ?? 1500, 'cmd-delay')),
+    pack,
+    viewDistance,
     jump: !flags['no-jump'],
     reconnect: !flags['no-reconnect'],
     quiet: Boolean(flags.quiet)
@@ -94,8 +149,7 @@ const rand = (min, max) => min + Math.random() * (max - min)
 const randInt = (min, max) => Math.floor(rand(min, max + 1))
 
 function log (...args) {
-  const t = new Date().toTimeString().slice(0, 8)
-  console.log(`[${t}]`, ...args)
+  console.log(`[${new Date().toTimeString().slice(0, 8)}]`, ...args)
 }
 
 function human (ms) {
@@ -104,6 +158,14 @@ function human (ms) {
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
   return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+}
+
+// Nunca escribir una contrasena en el registro.
+function mask (text) {
+  return String(text).replace(
+    /^(\s*\/(?:login|l|register|reg|signup|changepassword|passwd|password)\s+)(\S+)/i,
+    (_, prefix, secret) => prefix + '*'.repeat(Math.min(secret.length, 8))
+  )
 }
 
 // ---------------------------------------------------------------- estado
@@ -127,8 +189,8 @@ const startedAt = Date.now()
 const endAt = startedAt + config.durationMs
 
 let bot = null
-let finished = false       // true cuando ya se cumplio el tiempo o hay que salir
-let session = 0            // cambia en cada reconexion: invalida el bucle viejo
+let finished = false       // ya se cumplio el plazo o hay que salir
+let session = 0            // sube en cada reconexion: invalida el bucle viejo
 let reconnectDelay = 5000
 let statusTimer = null
 let endTimer = null
@@ -144,12 +206,10 @@ function releaseControls (target) {
   }
 }
 
-// Un ciclo = adelante, atras (misma duracion, vuelve al punto de partida),
-// saltos y un giro de camara. Las pausas son aleatorias para no ser un patron
-// perfectamente regular.
-async function moveLoop (self, mySession) {
-  const alive = () => !finished && session === mySession && self === bot && self.entity
-
+// Un ciclo: adelante, atras la misma duracion (vuelve al punto de partida),
+// saltos y un giro de camara. Los tiempos son aleatorios para no repetir un
+// patron exacto.
+async function moveLoop (self, alive) {
   while (alive() && remaining() > 0) {
     const step = Math.round(rand(700, 1600))
 
@@ -189,6 +249,23 @@ async function moveLoop (self, mySession) {
   releaseControls(self)
 }
 
+// Primero los comandos de entrada (login de AuthMe, warp...), luego a moverse.
+async function runSession (self, mySession) {
+  const alive = () => !finished && session === mySession && self === bot && Boolean(self.entity)
+
+  if (config.commands.length > 0) {
+    await sleep(config.joinDelay)
+    for (const command of config.commands) {
+      if (!alive()) return
+      log('enviando >', mask(command))
+      try { self.chat(command) } catch (err) { log('No se pudo enviar:', err.message) }
+      await sleep(config.cmdDelay)
+    }
+  }
+
+  await moveLoop(self, alive)
+}
+
 // ---------------------------------------------------------------- conexion
 
 function connect () {
@@ -202,7 +279,8 @@ function connect () {
     username: config.username,
     auth: config.auth,
     version: config.version,
-    hideErrors: true   // los errores se registran aqui abajo, sin el volcado crudo
+    viewDistance: config.viewDistance, // pedir pocos chunks: menos RAM y menos CPU
+    hideErrors: true                   // los errores se registran aqui abajo
   })
 
   const self = bot
@@ -213,30 +291,34 @@ function connect () {
     log(`Dentro del servidor. Version ${self.version}.` +
         (pos ? ` Posicion ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}.` : '') +
         ` Quedan ${human(remaining())}.`)
-    moveLoop(self, mySession).catch((err) => log('Error en el movimiento:', err.message))
+    runSession(self, mySession).catch((err) => log('Error en la sesion:', err.message))
   })
+
+  if (config.pack !== 'ignore') {
+    // Muchos Paper exigen el paquete de recursos y expulsan si no se contesta.
+    self.on('resourcePack', () => {
+      log(`Paquete de recursos: ${config.pack === 'accept' ? 'aceptado' : 'rechazado'}`)
+      try {
+        if (config.pack === 'accept') self.acceptResourcePack()
+        else self.denyResourcePack()
+      } catch (err) { log('No se pudo contestar al paquete:', err.message) }
+    })
+  }
 
   self.on('death', () => log('El bot murio; reaparece y sigue.'))
   self.on('kicked', (reason) => log('Expulsado:', typeof reason === 'string' ? reason : JSON.stringify(reason)))
   self.on('error', (err) => log('Error de conexion:', err.message))
 
-  if (!config.quiet) {
-    self.on('messagestr', (msg) => log('chat >', msg))
-  }
+  if (!config.quiet) self.on('messagestr', (msg) => log('chat >', msg))
 
   self.on('end', (reason) => {
     releaseControls(self)
-    if (self !== bot) return            // sesion vieja, ignorar
-    if (finished) return                 // cierre planeado, ya se informo
+    if (self !== bot) return             // sesion vieja, ignorar
+    if (finished) return                  // cierre planeado, ya se informo
     log(`Desconectado (${reason || 'sin motivo'}).`)
-    if (!config.reconnect) {
-      shutdown('desconectado y --no-reconnect', 1)
-      return
-    }
-    if (remaining() <= 0) {
-      shutdown('se cumplio el tiempo', 0)
-      return
-    }
+    if (!config.reconnect) return shutdown('desconectado y --no-reconnect', 1)
+    if (remaining() <= 0) return shutdown('se cumplio el tiempo', 0)
+
     const delay = Math.min(reconnectDelay, remaining())
     log(`Reintentando en ${Math.round(delay / 1000)}s. Quedan ${human(remaining())}.`)
     setTimeout(() => { if (!finished) connect() }, delay)
@@ -258,7 +340,6 @@ function shutdown (reason, code) {
   if (current) {
     try { current.quit('afk terminado') } catch { /* ya cerrado */ }
   }
-  // margen para que salga el paquete de desconexion antes de matar el proceso
   setTimeout(() => process.exit(code), 1500).unref()
 }
 
@@ -274,8 +355,7 @@ endTimer = setTimeout(() => shutdown('se cumplio el tiempo programado', 0), conf
 
 statusTimer = setInterval(() => {
   if (finished) return
-  const estado = bot?.entity ? 'conectado' : 'sin conexion'
-  log(`Sigo aqui (${estado}). Quedan ${human(remaining())}.`)
+  log(`Sigo aqui (${bot?.entity ? 'conectado' : 'sin conexion'}). Quedan ${human(remaining())}.`)
 }, 15 * 60 * 1000)
 
 connect()

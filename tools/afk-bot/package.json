@@ -2,14 +2,20 @@
   "name": "n4y-afk-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Bot anti-AFK para Minecraft Java: camina adelante/atras, salta y se desconecta solo tras N horas",
+  "description": "Bot anti-AFK para Minecraft Java (Paper/Spigot/vanilla): camina, salta y sale solo; con programador para entrar cada X horas",
   "main": "afk-bot.js",
-  "bin": { "afk-bot": "afk-bot.js" },
+  "bin": {
+    "afk-bot": "afk-bot.js",
+    "afk-loop": "afk-loop.js"
+  },
   "scripts": {
     "start": "node afk-bot.js",
+    "loop": "node afk-loop.js",
     "test": "node --test test/afk-bot.test.js"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT",
   "dependencies": {
     "mineflayer": "^4.39.0"
