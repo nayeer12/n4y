@@ -190,3 +190,16 @@ sin pulsar el buscador.
 Para grabar: **Modo cine** enciende de golpe Ocultar HUD, Ocultar manos, Sin balanceo y
 Cámara cine, y al apagarlo deja cada uno como estaba. **Captura limpia**, con una tecla
 asignada, hace la foto sin interfaz ni manos y lo restaura todo solo.
+
+## Bot anti-AFK (aparte del mod)
+
+En `tools/afk-bot/` hay un bot de consola, independiente del cliente: entra a un
+servidor, camina adelante y atrás, salta y se desconecta solo a las 7 horas. Es
+Node.js con mineflayer, no abre el juego.
+
+```bash
+cd tools/afk-bot && npm install
+node afk-bot.js --host mi.servidor.com --user AfkBot --version 1.21.11
+```
+
+Detalles y opciones en `tools/afk-bot/README.md`.
