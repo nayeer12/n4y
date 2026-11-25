@@ -39,6 +39,19 @@ public final class Colors {
 	}
 
 	/** Linear interpolation of all four channels, {@code t} clamped to 0..1. */
+	/**
+	 * The largest difference between two colours across alpha, red, green and blue.
+	 *
+	 * <p>Used to decide whether a gradient between them is worth drawing as a gradient at all:
+	 * below a few units per channel the eye cannot tell it from a flat fill.
+	 */
+	public static int maxChannelDelta(int a, int b) {
+		int delta = Math.abs(alpha(a) - alpha(b));
+		delta = Math.max(delta, Math.abs(red(a) - red(b)));
+		delta = Math.max(delta, Math.abs(green(a) - green(b)));
+		return Math.max(delta, Math.abs(blue(a) - blue(b)));
+	}
+
 	public static int lerp(int from, int to, float t) {
 		if (t <= 0f) {
 			return from;

@@ -3,6 +3,8 @@ package com.n4y.client.core.keybind;
 import java.util.HashSet;
 import java.util.Set;
 
+import java.util.List;
+
 import com.n4y.client.core.input.InputBinding;
 import com.n4y.client.module.Module;
 import com.n4y.client.module.ModuleManager;
@@ -43,7 +45,9 @@ public final class KeybindManager {
 	 *                during a menu does not fire the moment the menu closes
 	 */
 	public void tick(boolean allowed) {
-		for (Module module : modules.all()) {
+		List<Module> all = modules.all();
+		for (int i = 0; i < all.size(); i++) {
+			Module module = all.get(i);
 			if (!module.hasKey()) {
 				continue;
 			}

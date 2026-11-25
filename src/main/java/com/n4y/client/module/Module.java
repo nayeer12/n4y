@@ -112,7 +112,12 @@ public abstract class Module {
 	}
 
 	public final Optional<Setting<?>> setting(String settingId) {
-		return settings.stream().filter(setting -> setting.id().equals(settingId)).findFirst();
+		for (int i = 0; i < settings.size(); i++) {
+			if (settings.get(i).id().equals(settingId)) {
+				return Optional.of(settings.get(i));
+			}
+		}
+		return Optional.empty();
 	}
 
 	/** Puts every setting back to the value it ships with. */

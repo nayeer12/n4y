@@ -105,8 +105,10 @@ public final class HudStudioScreen extends Screen {
 		for (HudAnchor anchor : HudAnchor.values()) {
 			float x = anchor.originX(width, 0f);
 			float y = anchor.originY(height, 0f);
-			GlassRenderer.roundedRect(g, x - 4f, y - 0.5f, 8f, 1f, 0.5f, color);
-			GlassRenderer.roundedRect(g, x - 0.5f, y - 4f, 1f, 8f, 0.5f, color);
+			// Radius zero: these are one pixel thick, so rounding them only bought four
+			// corner blits each — 112 draw calls a frame for sixteen hairlines.
+			GlassRenderer.roundedRect(g, x - 4f, y - 0.5f, 8f, 1f, 0f, color);
+			GlassRenderer.roundedRect(g, x - 0.5f, y - 4f, 1f, 8f, 0f, color);
 		}
 	}
 

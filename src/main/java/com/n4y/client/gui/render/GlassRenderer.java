@@ -16,10 +16,10 @@ public final class GlassRenderer {
 	public static final int CORNERS_ALL = 0b11;
 	public static final int CORNERS_TOP = 0b01;
 	public static final int CORNERS_BOTTOM = 0b10;
-	/** Bands used to shade a rounded corner that sits on a gradient. */
-	private static final int MAX_GRADIENT_BANDS = 8;
+	/** Most bands used to shade a rounded corner that sits on a gradient. */
+	static final int MAX_GRADIENT_BANDS = 8;
 	/** Channel difference below which a gradient is drawn as a flat colour. */
-	private static final int FLAT_TOLERANCE = 6;
+	static final int FLAT_TOLERANCE = 6;
 
 	private GlassRenderer() {
 	}
@@ -170,9 +170,14 @@ public final class GlassRenderer {
 	}
 
 	/**
-	 * Corner tinted with the gradient. A flat colour, or one the eye cannot tell from flat, is
-	 * a single blit; a real gradient is drawn in a few horizontal bands instead of one blit per
-	 * pixel row, which keeps a window full of cards at a handful of draw calls.
+	 * Corner tinted with the gradient, in as few bands as the gradient actually needs.
+	 *
+	 * <p>A corner is a small part of the shape it belongs to: on the main panel it covers about
+	 * a sixteenth of the height, so only a sixteenth of the gradient passes through it. What
+	 * matters is therefore how much the colour moves across the corner, not across the whole
+	 * shape — which is what this used to ask. A subtle gradient down a tall panel would move a
+	 * couple of units over a corner and still be drawn as eight stacked blits, so every card and
+	 * every panel cost tens of draw calls to render a corner the eye reads as one colour.
 	 */
 	private static void cornerGradient(GuiGraphics g, ShapeTextures.Mask m, int x, int y, int u, int v,
 			int top, int bottom, int localY, int height) {
@@ -180,11 +185,13 @@ public final class GlassRenderer {
 		if (k <= 0) {
 			return;
 		}
-		if (isFlat(top, bottom)) {
-			corner(g, m, x, y, u, v, Colors.lerp(top, bottom, 0.5f));
+		int bands = gradientBands(top, bottom, localY, k, height);
+		if (bands <= 1) {
+			// The colour at the middle of the corner, not of the whole shape: a corner at the
+			// far end of a gradient must not be tinted with the shape's average.
+			corner(g, m, x, y, u, v, at(top, bottom, localY + k / 2f, height));
 			return;
 		}
-		int bands = Math.min(k, MAX_GRADIENT_BANDS);
 		for (int band = 0; band < bands; band++) {
 			int from = band * k / bands;
 			int to = (band + 1) * k / bands;
@@ -196,12 +203,25 @@ public final class GlassRenderer {
 		}
 	}
 
-	/** True when two colours are close enough that a gradient between them is invisible. */
-	private static boolean isFlat(int a, int b) {
-		return Math.abs(Colors.alpha(a) - Colors.alpha(b)) <= FLAT_TOLERANCE
-				&& Math.abs(Colors.red(a) - Colors.red(b)) <= FLAT_TOLERANCE
-				&& Math.abs(Colors.green(a) - Colors.green(b)) <= FLAT_TOLERANCE
-				&& Math.abs(Colors.blue(a) - Colors.blue(b)) <= FLAT_TOLERANCE;
+	/**
+	 * How many horizontal bands a corner spanning {@code span} pixels needs, starting
+	 * {@code localY} pixels down a gradient that runs from {@code top} to {@code bottom} over
+	 * {@code height} pixels.
+	 *
+	 * <p>One band per {@link #FLAT_TOLERANCE} of colour change, so the step between two bands is
+	 * always below what the tolerance already treats as invisible, and never more than
+	 * {@link #MAX_GRADIENT_BANDS} or one band per pixel.
+	 */
+	static int gradientBands(int top, int bottom, int localY, int span, int height) {
+		if (span <= 1) {
+			return 1;
+		}
+		int delta = Colors.maxChannelDelta(at(top, bottom, localY, height), at(top, bottom, localY + span, height));
+		if (delta <= FLAT_TOLERANCE) {
+			return 1;
+		}
+		int needed = (delta + FLAT_TOLERANCE - 1) / FLAT_TOLERANCE;
+		return Math.max(2, Math.min(Math.min(span, MAX_GRADIENT_BANDS), needed));
 	}
 
 	private static void strip(GuiGraphics g, ShapeTextures.Mask m, int x, int y, int w, int h, int u, int v, int rw, int rh, int color) {
