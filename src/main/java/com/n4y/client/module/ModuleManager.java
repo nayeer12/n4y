@@ -1,7 +1,11 @@
 package com.n4y.client.module;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.n4y.client.N4y;
@@ -40,13 +44,26 @@ import com.n4y.client.combat.CombatContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 
-/** Registry and driver of every {@link Module}. */
+/**
+ * Registry and driver of every {@link Module}.
+ *
+ * <p>Lookups are indexed rather than scanned, and the accessors that run while the game draws do
+ * not allocate: {@link #all()} hands out a view instead of copying the list on every call, and
+ * {@link #enabledCount()} counts in place where {@code enabled().size()} built a stream and a
+ * list only to ask how long it was.
+ */
 public final class ModuleManager {
 	private final List<Module> modules = new ArrayList<>();
+	private final List<Module> view = Collections.unmodifiableList(modules);
+	private final Map<String, Module> index = new HashMap<>();
+	/** Lazily normalised name, description and id of each module, for the search box. */
+	private final Map<Module, String> searchText = new IdentityHashMap<>();
 	private Runnable changeListener = () -> { };
 	private Consumer<Module> stateListener = module -> { };
 	/** Suppresses change notifications while a stored configuration is being applied. */
 	private boolean applying;
+	/** Set by {@link #disableAll} while it works, so the options are only written if needed. */
+	private boolean disabledAny;
 
 	/**
 	 * Registers the built-in modules. Order here is the order shown in the interface.
@@ -94,12 +111,16 @@ public final class ModuleManager {
 	}
 
 	public void register(Module module) {
-		if (byId(module.id()).isPresent()) {
+		if (module == null) {
+			throw new IllegalArgumentException("Cannot register a null module");
+		}
+		if (index.containsKey(module.id())) {
 			throw new IllegalArgumentException("Duplicate module id: " + module.id());
 		}
 		module.setChangeListener(this::onModuleChanged);
 		module.setStateListener(this::onModuleToggled);
 		modules.add(module);
+		index.put(module.id(), module);
 	}
 
 	/** Called whenever any module is toggled or rebound; the config layer listens here. */
@@ -140,46 +161,64 @@ public final class ModuleManager {
 		bus.subscribe(ClientShutdownEvent.class, e -> disableAll(Minecraft.getInstance()));
 	}
 
+	/** Indexed so the tick loop does not allocate an iterator twenty times a second. */
 	private void tick(Minecraft mc) {
-		for (Module module : modules) {
-			if (module.isEnabled()) {
-				try {
-					module.onTick(mc);
-				} catch (Throwable t) {
-					N4y.LOGGER.error("Module '{}' failed while ticking, disabling it", module.id(), t);
-					module.setEnabled(false);
-				}
+		for (int i = 0; i < modules.size(); i++) {
+			Module module = modules.get(i);
+			if (!module.isEnabled()) {
+				continue;
+			}
+			try {
+				module.onTick(mc);
+			} catch (Throwable t) {
+				N4y.LOGGER.error("Module '{}' failed while ticking, disabling it", module.id(), t);
+				module.setEnabled(false);
 			}
 		}
 	}
 
 	/** Turns everything off, clears the render flags and writes the restored options to disk. */
 	public void disableAll(Minecraft mc) {
-		boolean[] any = {false};
-		applySilently(() -> {
-			for (Module module : modules) {
-				if (module.isEnabled()) {
-					module.setEnabled(false);
-					any[0] = true;
-				}
-			}
-		});
+		applySilently(this::disableEveryEnabledModule);
 		ModuleFlags.reset();
-		if (any[0] && mc.options != null) {
+		if (disabledAny && mc != null && mc.options != null) {
 			mc.options.save();
+		}
+		disabledAny = false;
+	}
+
+	private void disableEveryEnabledModule() {
+		for (int i = 0; i < modules.size(); i++) {
+			Module module = modules.get(i);
+			if (module.isEnabled()) {
+				module.setEnabled(false);
+				disabledAny = true;
+			}
 		}
 	}
 
+	/** An unmodifiable view, not a copy: safe to iterate and free to ask for every frame. */
 	public List<Module> all() {
-		return List.copyOf(modules);
+		return view;
 	}
 
 	public Optional<Module> byId(String id) {
-		return modules.stream().filter(m -> m.id().equals(id)).findFirst();
+		return id == null ? Optional.empty() : Optional.ofNullable(index.get(id));
 	}
 
 	public List<Module> enabled() {
 		return modules.stream().filter(Module::isEnabled).toList();
+	}
+
+	/** How many modules are on, without building the list of them. */
+	public int enabledCount() {
+		int count = 0;
+		for (int i = 0; i < modules.size(); i++) {
+			if (modules.get(i).isEnabled()) {
+				count++;
+			}
+		}
+		return count;
 	}
 
 	/**
@@ -189,19 +228,39 @@ public final class ModuleManager {
 	public List<Module> filter(ModuleCategory category, String query) {
 		String needle = normalise(query);
 		List<Module> out = new ArrayList<>();
-		for (Module module : modules) {
+		for (int i = 0; i < modules.size(); i++) {
+			Module module = modules.get(i);
 			if (category != ModuleCategory.ALL && module.category() != category) {
 				continue;
 			}
-			if (!needle.isEmpty()
-					&& !normalise(module.displayName().getString()).contains(needle)
-					&& !normalise(module.description().getString()).contains(needle)
-					&& !normalise(module.id()).contains(needle)) {
+			if (!needle.isEmpty() && !haystack(module).contains(needle)) {
 				continue;
 			}
 			out.add(module);
 		}
 		return out;
+	}
+
+	/**
+	 * The text a search looks through, normalised once per module. Building it resolves two
+	 * translations and strips accents, which is far too much to redo for every module on every
+	 * keystroke.
+	 */
+	private String haystack(Module module) {
+		String cached = searchText.get(module);
+		if (cached != null) {
+			return cached;
+		}
+		String built = normalise(module.displayName().getString())
+				+ '\u0000' + normalise(module.description().getString())
+				+ '\u0000' + normalise(module.id());
+		searchText.put(module, built);
+		return built;
+	}
+
+	/** Drops the search index; call it when the language changes. */
+	public void invalidateSearchIndex() {
+		searchText.clear();
 	}
 
 	/** Lower-cases and strips accents so "zoom" matches "Zoom" and "camara" matches "Cámara". */

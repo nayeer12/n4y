@@ -84,6 +84,45 @@ class ModuleManagerTest {
 	}
 
 	@Test
+	void enabledCountMatchesTheEnabledListWithoutBuildingIt() {
+		ModuleManager manager = new ModuleManager();
+		Fake a = new Fake("a", ModuleCategory.MISC);
+		Fake b = new Fake("b", ModuleCategory.MISC);
+		Fake c = new Fake("c", ModuleCategory.MISC);
+		manager.register(a);
+		manager.register(b);
+		manager.register(c);
+
+		assertEquals(0, manager.enabledCount());
+		a.setEnabled(true);
+		c.setEnabled(true);
+		assertEquals(2, manager.enabledCount());
+		assertEquals(manager.enabled().size(), manager.enabledCount());
+		c.setEnabled(false);
+		assertEquals(1, manager.enabledCount());
+	}
+
+	@Test
+	void byIdFindsRegisteredModulesAndNothingElse() {
+		ModuleManager manager = new ModuleManager();
+		Fake zoom = new Fake("zoom", ModuleCategory.VISUAL);
+		manager.register(zoom);
+		assertEquals(zoom, manager.byId("zoom").orElseThrow());
+		assertTrue(manager.byId("missing").isEmpty());
+		assertTrue(manager.byId(null).isEmpty());
+	}
+
+	@Test
+	void allIsAReadOnlyViewThatFollowsRegistration() {
+		ModuleManager manager = new ModuleManager();
+		List<Module> view = manager.all();
+		assertEquals(0, view.size());
+		manager.register(new Fake("zoom", ModuleCategory.VISUAL));
+		assertEquals(1, view.size(), "all() must reflect a module registered after it was asked for");
+		assertThrows(UnsupportedOperationException.class, () -> manager.all().clear());
+	}
+
+	@Test
 	void enabledListTracksState() {
 		ModuleManager manager = new ModuleManager();
 		Fake a = new Fake("a", ModuleCategory.MISC);

@@ -36,7 +36,15 @@ public final class HudPanel {
 	}
 
 	public static void draw(GuiGraphics g, Theme theme, float x, float y, Icon icon, String[] lines) {
-		float w = width(lines);
+		draw(g, theme, x, y, width(lines), icon, lines);
+	}
+
+	/**
+	 * Draws the card at a width the caller has already measured. The manager measures an element
+	 * to place it and would otherwise measure it again here, which means measuring every line of
+	 * text on screen twice per frame for an answer that has not changed.
+	 */
+	public static void draw(GuiGraphics g, Theme theme, float x, float y, float w, Icon icon, String[] lines) {
 		float h = height(lines.length);
 		GlassRenderer.shadow(g, x, y + 1f, w, h, 7f, 7, 0x55000000);
 		GlassRenderer.roundedRect(g, x, y, w, h, 7f,

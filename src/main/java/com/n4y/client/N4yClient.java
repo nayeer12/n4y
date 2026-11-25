@@ -13,6 +13,7 @@ import com.n4y.client.gui.screen.N4yMainScreen;
 import com.n4y.client.gui.hud.HudManager;
 import com.n4y.client.gui.hud.NotificationCenter;
 import com.n4y.client.gui.icon.Icons;
+import com.n4y.client.gui.render.GeneratedResources;
 import com.n4y.client.gui.theme.ThemeEngine;
 import com.n4y.client.module.ModuleManager;
 
@@ -85,6 +86,9 @@ public final class N4yClient implements ClientModInitializer {
 		long start = System.nanoTime();
 
 		N4yPaths.ensureCreated();
+		// Generated textures and measured text follow the resource packs, so they are dropped
+		// whenever those reload instead of being kept for a font that is no longer loaded.
+		GeneratedResources.registerReloadListener(moduleManager::invalidateSearchIndex);
 		N4yKeybinds.register();
 		N4yKeybinds.onOpenGui(mc -> mc.setScreen(new N4yMainScreen()));
 		combat = CombatContext.create((title, detail) -> hudManager.notifications()
@@ -107,7 +111,7 @@ public final class N4yClient implements ClientModInitializer {
 			keybindManager = KeybindManager.forGame(moduleManager, mc);
 			configManager.applyToGame();
 			N4y.LOGGER.info("Profile '{}' loaded with {} module(s) active",
-					configManager.activeProfileName(), moduleManager.enabled().size());
+					configManager.activeProfileName(), moduleManager.enabledCount());
 		});
 
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {

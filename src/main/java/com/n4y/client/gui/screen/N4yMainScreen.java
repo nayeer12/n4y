@@ -122,6 +122,10 @@ public final class N4yMainScreen extends Screen {
 	private List<Module> visibleCache;
 	private String visibleQuery = "";
 	private ModuleCategory visibleCategory;
+	/** Header subtitle, kept until one of the three values in it changes. */
+	private String headerSubtitle;
+	private String headerProfile;
+	private int headerEnabled = -1;
 
 	public N4yMainScreen() {
 		super(Component.literal(N4y.NAME));
@@ -518,13 +522,27 @@ public final class N4yMainScreen extends Screen {
 		IconTextures.draw(g, Icons.CUBE, panelX + PAD + 5f, panelY + 18f, 14f, Colors.fade(0xFFFFFFFF, a));
 
 		N4yText.draw(g, N4y.NAME, panelX + PAD + 32f, panelY + 14f, 1.15f, Colors.fade(t.textPrimary(), a), true);
-		String sub = "v" + N4y.version() + " · " + config().activeProfileName() + " · "
-				+ Component.translatable("n4y.header.active", modules().enabled().size()).getString();
-		N4yText.draw(g, N4yText.ellipsize(sub, false, 0.78f, 150f), panelX + PAD + 32f, panelY + 27.5f, 0.78f, Colors.fade(t.textMuted(), a), false);
+		N4yText.draw(g, headerSubtitle(), panelX + PAD + 32f, panelY + 27.5f, 0.78f, Colors.fade(t.textMuted(), a), false);
 
 		if (tab == Tab.MODULES) {
 			search.render(ctx);
 		}
+	}
+
+	/**
+	 * The version, profile and active-module line, rebuilt only when it would read differently.
+	 * It was being concatenated, translated and trimmed on every frame the panel was open.
+	 */
+	private String headerSubtitle() {
+		String profile = config().activeProfileName();
+		int active = modules().enabledCount();
+		if (headerSubtitle == null || active != headerEnabled || !profile.equals(headerProfile)) {
+			headerProfile = profile;
+			headerEnabled = active;
+			headerSubtitle = N4yText.ellipsize("v" + N4y.version() + " · " + profile + " · "
+					+ Component.translatable("n4y.header.active", active).getString(), false, 0.78f, 150f);
+		}
+		return headerSubtitle;
 	}
 
 	private void renderSidebar(UiContext ctx) {
