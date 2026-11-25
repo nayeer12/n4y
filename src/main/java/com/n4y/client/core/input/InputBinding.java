@@ -20,6 +20,8 @@ import org.lwjgl.glfw.GLFW;
 public record InputBinding(InputBinding.Type type, int code) {
 	/** Nothing bound. */
 	public static final InputBinding UNBOUND = new InputBinding(Type.NONE, -1);
+	/** Held as a constant so the key chip of an unbound control allocates nothing per frame. */
+	private static final Component NONE_NAME = Component.translatable("n4y.key.none");
 
 	/** Source of an input. */
 	public enum Type implements StringRepresentable {
@@ -86,7 +88,7 @@ public record InputBinding(InputBinding.Type type, int code) {
 		return switch (type) {
 			case KEY -> InputConstants.Type.KEYSYM.getOrCreate(code).getDisplayName();
 			case MOUSE -> InputConstants.Type.MOUSE.getOrCreate(code).getDisplayName();
-			case NONE -> Component.translatable("n4y.key.none");
+			case NONE -> NONE_NAME;
 		};
 	}
 }

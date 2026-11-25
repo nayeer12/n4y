@@ -26,6 +26,9 @@ public abstract class Module {
 	private final Icon icon;
 	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean enabled;
+	/** Built once: the key is fixed, and the component itself re-translates on a language change. */
+	private Component displayName;
+	private Component description;
 	private InputBinding key = InputBinding.UNBOUND;
 	private Runnable changeListener = () -> { };
 	private java.util.function.Consumer<Module> stateListener = module -> { };
@@ -48,12 +51,23 @@ public abstract class Module {
 		return icon;
 	}
 
+	/**
+	 * The translated name. The component is kept rather than rebuilt, because this is asked for
+	 * on every frame by every visible card and building it concatenated the translation key and
+	 * allocated a component each time.
+	 */
 	public Component displayName() {
-		return Component.translatable("n4y.module." + id);
+		if (displayName == null) {
+			displayName = Component.translatable("n4y.module." + id);
+		}
+		return displayName;
 	}
 
 	public Component description() {
-		return Component.translatable("n4y.module." + id + ".desc");
+		if (description == null) {
+			description = Component.translatable("n4y.module." + id + ".desc");
+		}
+		return description;
 	}
 
 	public final boolean isEnabled() {

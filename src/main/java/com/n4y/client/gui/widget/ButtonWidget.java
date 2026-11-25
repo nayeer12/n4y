@@ -46,6 +46,6 @@ public final class ButtonWidget extends N4yWidget {
 				Colors.fade(t.borderTop(), a), Colors.fade(t.borderBottom(), a));
 
 		int textColor = Colors.fade(primary && isUsable() ? 0xFFFFFFFF : t.textPrimary(), a);
-		N4yText.drawCentered(ctx.g(), label.getString(), x + width / 2f, y + height / 2f, 0.88f, textColor, true);
+		N4yText.drawCentered(ctx.g(), N4yText.resolve(label), x + width / 2f, y + height / 2f, 0.88f, textColor, true);
 	}
 }

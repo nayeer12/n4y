@@ -115,7 +115,7 @@ public final class TextFieldWidget extends N4yWidget {
 		float textY = y + (height - 7f) / 2f - 0.5f;
 		float maxW = width - (textX - x) - 10;
 		if (text.isEmpty()) {
-			N4yText.draw(ctx.g(), placeholder.getString(), textX, textY, 0.9f, Colors.fade(t.textMuted(), a), false);
+			N4yText.draw(ctx.g(), N4yText.resolve(placeholder), textX, textY, 0.9f, Colors.fade(t.textMuted(), a), false);
 		} else {
 			String shown = N4yText.ellipsizeStart(text.toString(), false, 0.9f, maxW);
 			N4yText.draw(ctx.g(), shown, textX, textY, 0.9f, Colors.fade(t.textPrimary(), a), false);

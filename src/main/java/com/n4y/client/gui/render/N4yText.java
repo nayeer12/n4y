@@ -46,6 +46,20 @@ public final class N4yText {
 	private record Measured(Component component, float width) {
 	}
 
+	/**
+	 * Resolved text per component, keyed by equality and bounded.
+	 *
+	 * <p>Equality rather than identity so that a caller which rebuilds an equal component each
+	 * frame still hits the cache, and bounded because a render path must not be able to grow a
+	 * map without end — the two together mean no call site can turn this into a leak.
+	 */
+	private static final Map<Component, String> RESOLVED = new LinkedHashMap<>(MAX_MEASURED * 2, 0.75f, true) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<Component, String> eldest) {
+			return size() > MAX_MEASURED;
+		}
+	};
+
 	private static final Map<String, Measured> REGULAR_LABELS = labelCache();
 	private static final Map<String, Measured> SEMIBOLD_LABELS = labelCache();
 
@@ -81,6 +95,7 @@ public final class N4yText {
 		REGULAR_LABELS.clear();
 		SEMIBOLD_LABELS.clear();
 		TRIMMED.clear();
+		RESOLVED.clear();
 	}
 
 	/**
@@ -96,6 +111,27 @@ public final class N4yText {
 	 * A fresh component in the n4y font. Callers that keep or further style the result want this;
 	 * drawing and measuring inside this class use the shared, cached one instead.
 	 */
+	/**
+	 * The text of {@code component}, resolved once per component.
+	 *
+	 * <p>{@code Component.getString()} walks the component and builds a new string every call, so
+	 * a label drawn every frame was being translated and rebuilt every frame. Cleared by
+	 * {@link #invalidateMetrics()}, which runs when the resource packs, and therefore the
+	 * language, reload.
+	 */
+	public static String resolve(Component component) {
+		if (component == null) {
+			return "";
+		}
+		String cached = RESOLVED.get(component);
+		if (cached != null) {
+			return cached;
+		}
+		String text = component.getString();
+		RESOLVED.put(component, text);
+		return text;
+	}
+
 	public static Component of(String text, boolean bold) {
 		return Component.literal(text).setStyle(bold ? SEMIBOLD_STYLE : REGULAR_STYLE);
 	}

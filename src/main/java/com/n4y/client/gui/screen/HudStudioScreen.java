@@ -28,6 +28,8 @@ import net.minecraft.network.chat.Component;
  * into the active profile.
  */
 public final class HudStudioScreen extends Screen {
+	private static final Component FIXED_ELEMENT = Component.translatable("n4y.hud.fixed");
+	private static final Component STUDIO_HINT = Component.translatable("n4y.hud.studio.hint");
 	private final Screen parent;
 	private final Animation fade = new Animation(0f, 220, Easing.OUT_CUBIC);
 
@@ -89,7 +91,7 @@ public final class HudStudioScreen extends Screen {
 			int outline = Colors.fade(element.movable() ? theme.accent() : theme.textMuted(), a * (active ? 1f : 0.5f));
 			GlassRenderer.border(g, x - 2, y - 2, w + 4, h + 4, 8f, active ? 1f : 0.6f, outline, outline);
 			if (!element.movable()) {
-				N4yText.drawCentered(g, Component.translatable("n4y.hud.fixed").getString(),
+				N4yText.drawCentered(g, N4yText.resolve(FIXED_ELEMENT),
 						x + w / 2f, y - 8f, 0.72f, Colors.fade(theme.textMuted(), a), false);
 			}
 		}
@@ -109,8 +111,8 @@ public final class HudStudioScreen extends Screen {
 	}
 
 	private void drawHeader(GuiGraphics g, Theme theme, float a) {
-		String title = getTitle().getString();
-		String hint = Component.translatable("n4y.hud.studio.hint").getString();
+		String title = N4yText.resolve(getTitle());
+		String hint = N4yText.resolve(STUDIO_HINT);
 		float w = Math.max(N4yText.width(title, true, 1.1f), N4yText.width(hint, false, 0.8f)) + 28f;
 		float h = 42f;
 		float x = (width - w) / 2f;

@@ -18,6 +18,7 @@ public enum ModuleCategory {
 
 	private final String id;
 	private final Icon icon;
+	private Component displayName;
 
 	ModuleCategory(String id, Icon icon) {
 		this.id = id;
@@ -32,7 +33,11 @@ public enum ModuleCategory {
 		return icon;
 	}
 
+	/** Kept rather than rebuilt: the sidebar asks for this on every frame. */
 	public Component displayName() {
-		return Component.translatable("n4y.category." + id);
+		if (displayName == null) {
+			displayName = Component.translatable("n4y.category." + id);
+		}
+		return displayName;
 	}
 }

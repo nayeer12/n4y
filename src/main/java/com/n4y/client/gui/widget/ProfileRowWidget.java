@@ -15,6 +15,8 @@ import net.minecraft.network.chat.Component;
 
 /** One saved profile: click the row to load it, click the cross to delete it. */
 public final class ProfileRowWidget extends N4yWidget {
+	private static final Component PROFILE_ACTIVE = Component.translatable("n4y.profiles.active");
+	private static final Component PROFILE_USE = Component.translatable("n4y.profiles.use");
 	private static final float DELETE_SIZE = 22f;
 
 	private final String name;
@@ -58,7 +60,7 @@ public final class ProfileRowWidget extends N4yWidget {
 				Colors.fade(Colors.lerp(t.textSecondary(), t.accent(), sel), a));
 		N4yText.draw(ctx.g(), N4yText.ellipsize(name, true, 1f, width - 100f), x + 34, y + height / 2f - 9f, 1f,
 				Colors.fade(t.textPrimary(), a), true);
-		String state = Component.translatable(sel > 0.5f ? "n4y.profiles.active" : "n4y.profiles.use").getString();
+		String state = N4yText.resolve(sel > 0.5f ? PROFILE_ACTIVE : PROFILE_USE);
 		N4yText.draw(ctx.g(), state, x + 34, y + height / 2f + 2f, 0.76f,
 				Colors.fade(sel > 0.5f ? t.accent() : t.textMuted(), a), false);
 

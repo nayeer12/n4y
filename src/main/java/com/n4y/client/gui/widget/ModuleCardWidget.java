@@ -19,6 +19,8 @@ import net.minecraft.network.chat.Component;
  * The key chip appears when a key is bound or while the cursor is on the card.
  */
 public final class ModuleCardWidget extends N4yWidget {
+	/** Held as a constant: resolving a component is cached per instance, not per text. */
+	private static final Component PRESS_A_KEY = Component.translatable("n4y.keybind.press");
 	private static final float ICON = 17f;
 	private static final float TOGGLE_W = 24f;
 	private static final float TOGGLE_H = 13f;
@@ -67,7 +69,7 @@ public final class ModuleCardWidget extends N4yWidget {
 		if (binding.getAsBoolean()) {
 			return "…";
 		}
-		return module.hasKey() ? module.key().displayName().getString() : "+";
+		return module.hasKey() ? N4yText.resolve(module.key().displayName()) : "+";
 	}
 
 	private float chipWidth() {
@@ -117,10 +119,8 @@ public final class ModuleCardWidget extends N4yWidget {
 		float textX = x + 11 + ICON + 9;
 		float textW = width - (textX - x) - rightInset() - TOGGLE_W - 7f - (showChip ? chipWidth() + 6f : 0f);
 
-		String name = module.displayName().getString();
-		String desc = isBinding
-				? Component.translatable("n4y.keybind.press").getString()
-				: module.description().getString();
+		String name = N4yText.resolve(module.displayName());
+		String desc = isBinding ? N4yText.resolve(PRESS_A_KEY) : N4yText.resolve(module.description());
 		// Trimming measures the text glyph by glyph, so only redo it when something changed.
 		if (textW != trimmedWidth || !name.equals(cachedName) || !desc.equals(cachedDesc)) {
 			cachedName = name;

@@ -27,6 +27,15 @@ public abstract class Setting<T> {
 		this.value = defaultValue;
 	}
 
+	/**
+	 * Both are built once and kept, because the settings panel asks for them on every frame.
+	 * Which component the name resolves to depends on whether a translation exists, so the
+	 * language it was decided under is remembered and the choice is remade if that changes.
+	 */
+	private Component displayName;
+	private Language displayNameLanguage;
+	private Component description;
+
 	public final String id() {
 		return id;
 	}
@@ -36,8 +45,13 @@ public abstract class Setting<T> {
 	 * missing language entry shows "Place Delay" instead of a raw key.
 	 */
 	public Component displayName() {
-		String key = "n4y.setting." + id;
-		return Language.getInstance().has(key) ? Component.translatable(key) : Component.literal(humanise(id));
+		Language language = Language.getInstance();
+		if (displayName == null || language != displayNameLanguage) {
+			String key = "n4y.setting." + id;
+			displayName = language.has(key) ? Component.translatable(key) : Component.literal(humanise(id));
+			displayNameLanguage = language;
+		}
+		return displayName;
 	}
 
 	private static String humanise(String id) {
@@ -61,7 +75,10 @@ public abstract class Setting<T> {
 	}
 
 	public final Component description() {
-		return Component.translatable("n4y.setting." + id + ".desc");
+		if (description == null) {
+			description = Component.translatable("n4y.setting." + id + ".desc");
+		}
+		return description;
 	}
 
 	public final T get() {

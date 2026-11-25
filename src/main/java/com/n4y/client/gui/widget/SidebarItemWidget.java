@@ -44,6 +44,6 @@ public final class SidebarItemWidget extends N4yWidget {
 
 		int color = Colors.fade(Colors.lerp(t.textSecondary(), t.textPrimary(), Math.max(sel, hovered)), a);
 		IconTextures.draw(ctx.g(), category.icon(), x + 9, y + (height - 13f) / 2f, 13f, color);
-		N4yText.draw(ctx.g(), category.displayName().getString(), x + 28, y + (height - 7f) / 2f - 0.5f, 0.92f, color, sel > 0.5f);
+		N4yText.draw(ctx.g(), N4yText.resolve(category.displayName()), x + 28, y + (height - 7f) / 2f - 0.5f, 0.92f, color, sel > 0.5f);
 	}
 }

@@ -21,6 +21,7 @@ import net.minecraft.network.chat.Component;
 public final class SettingRowWidget extends N4yWidget {
 	public static final float HEIGHT_PLAIN = 28f;
 	public static final float HEIGHT_DESCRIBED = 38f;
+	private static final Component PRESS_A_KEY = Component.translatable("n4y.keybind.press");
 	private static final float CONTROL_W = 150f;
 	private static final float TOGGLE_W = 24f;
 	private static final float TOGGLE_H = 13f;
@@ -121,10 +122,10 @@ public final class SettingRowWidget extends N4yWidget {
 
 		boolean described = setting.hasDescription();
 		float nameY = described ? y + height / 2f - 7f : y + height / 2f;
-		N4yText.drawMiddle(ctx.g(), setting.displayName().getString(), x, nameY, 0.92f,
+		N4yText.drawMiddle(ctx.g(), N4yText.resolve(setting.displayName()), x, nameY, 0.92f,
 				Colors.fade(t.textPrimary(), a), false);
 		if (described) {
-			N4yText.drawMiddle(ctx.g(), N4yText.ellipsize(setting.description().getString(), false, 0.74f, width - CONTROL_W - 8f),
+			N4yText.drawMiddle(ctx.g(), N4yText.ellipsize(N4yText.resolve(setting.description()), false, 0.74f, width - CONTROL_W - 8f),
 					x, y + height / 2f + 6f, 0.74f, Colors.fade(t.textMuted(), a), false);
 		}
 
@@ -143,8 +144,8 @@ public final class SettingRowWidget extends N4yWidget {
 	private void drawKeyChip(UiContext ctx, KeySetting keySetting, float hovered, float a, Theme t) {
 		boolean isBinding = binding.getAsBoolean();
 		String label = isBinding
-				? Component.translatable("n4y.keybind.press").getString()
-				: keySetting.binding().displayName().getString();
+				? N4yText.resolve(PRESS_A_KEY)
+				: N4yText.resolve(keySetting.binding().displayName());
 		float chipW = Math.min(110f, N4yText.width(label, false, 0.78f) + 14f);
 		float cx = x + width - chipW;
 		float cy = y + (height - CHIP_H) / 2f;
